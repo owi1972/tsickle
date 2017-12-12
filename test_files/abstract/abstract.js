@@ -71,4 +71,5 @@ class Derived extends Base {
      */
     hasReturnType() { return 3; }
 }
-let /** @type {!Base} */ x = new Derived();
+/** @type {!Base} */
+let x = new Derived();

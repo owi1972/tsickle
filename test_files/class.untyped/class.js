@@ -42,12 +42,13 @@ class ImplementsTypeAlias {
      */
     superFunc() { }
 }
-// Verify Closure accepts the various casts.
-let /** @type {?} */ interfaceVar;
+/** @type {?} */
+let interfaceVar;
 interfaceVar = new Implements();
 interfaceVar = new Extends();
 interfaceVar = new ImplementsTypeAlias();
-let /** @type {?} */ superVar;
+/** @type {?} */
+let superVar;
 superVar = new Implements();
 superVar = new Extends();
 superVar = new ImplementsTypeAlias();

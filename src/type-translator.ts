@@ -415,7 +415,14 @@ export class TypeTranslator {
   // translateObject translates a ts.ObjectType, which is the type of all
   // object-like things in TS, such as classes and interfaces.
   private translateObject(type: ts.ObjectType): string {
-    if (type.symbol && this.isBlackListed(type.symbol)) return '?';
+    if (type.symbol && this.isBlackListed(type.symbol)) {
+      if (type.symbol.declarations && type.symbol.name === 'IModule' &&
+          type.symbol.declarations.some(
+              decl => decl.getSourceFile().fileName.endsWith('/angular/index.d.ts'))) {
+        return '!angular.Module';
+      }
+      return '?';
+    }
 
     // NOTE: objectFlags is an enum, but a given type can have multiple flags.
     // Array<string> is both ts.ObjectFlags.Reference and ts.ObjectFlags.Interface.

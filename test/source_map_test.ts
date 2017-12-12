@@ -46,6 +46,10 @@ class TestSourceMapper implements SourceMapper {
       source: this.fileName,
     });
   }
+
+  addMappingForRange(node: ts.Node, from: number, to: number) {
+    throw new Error('not implemented');
+  }
 }
 
 describe('source maps', () => {

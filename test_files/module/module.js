@@ -4,5 +4,6 @@
  */
 goog.module('test_files.module.module');var module = module || {id: 'test_files/module/module.js'};var Reflect;
 (function (Reflect) {
-    const /** @type {number} */ x = 1;
+    /** @type {number} */
+    const x = 1;
 })(Reflect || (Reflect = {}));

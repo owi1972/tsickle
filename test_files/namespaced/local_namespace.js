@@ -9,4 +9,5 @@ var unexported;
     }
     unexported.Unexported = Unexported;
 })(unexported || (unexported = {}));
-let /** @type {?} */ x;
+/** @type {?} */
+let x;

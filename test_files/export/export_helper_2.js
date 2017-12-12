@@ -3,10 +3,11 @@
  * @suppress {checkTypes} checked by tsc
  */
 goog.module('test_files.export.export_helper_2');var module = module || {id: 'test_files/export/export_helper_2.js'};
-// This file isn't itself a test case, but it is imported by the
-// export.in.ts test case.
+/** @type {number} */
 exports.export2 = 3;
+/** @type {number} */
 exports.export3 = 3;
+/** @type {number} */
 exports.export4 = 3;
 /** @typedef {(string|number)} */
 exports.TypeDef;
