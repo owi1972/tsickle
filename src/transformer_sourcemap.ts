@@ -146,19 +146,6 @@ class NodeSourceMapper implements SourceMapper {
     this.offset += offset;
   }
 
-  /**
-   * Adds a mapping for the specific start/end range in the generated output back to the
-   * originalNode.
-   */
-  addMappingForRange(originalNode: ts.Node, startPos: number, endPos: number) {
-    // TODO(martinprobst): This glaringly duplicates addMapping below. However attempting to unify
-    // these causes failures around exported variable nodes. Additionally, inspecting this code
-    // longer suggests that it really only barely works by accident, and should much rather be
-    // replaced by proper transformers :-(
-    const cc = this.nodeCacheKey(originalNode.kind, startPos, endPos);
-    this.originalNodeByGeneratedRange.set(cc, originalNode);
-  }
-
   addMapping(
       originalNode: ts.Node, original: SourcePosition, generated: SourcePosition, length: number) {
     let originalStartPos = original.position;

@@ -1242,7 +1242,6 @@ class Annotator extends ClosureRewriter {
         }
       }
       this.emit('\n');
-      const finishMapping = this.startSourceMapping(varStmt);
       if (hasModifierFlag(varStmt, ts.ModifierFlags.Export)) this.emit('export ');
       this.addSourceMapping(decl);
       this.emit(keyword);
@@ -1252,7 +1251,6 @@ class Annotator extends ClosureRewriter {
         this.visit(decl.initializer);
       }
       this.emit(';');
-      finishMapping();
     }
   }
 
