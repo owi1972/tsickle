@@ -15,6 +15,7 @@ import {hasExportingDecorator} from './decorators';
 import * as googmodule from './googmodule';
 import * as jsdoc from './jsdoc';
 import {getIdentifierText} from './rewriter';
+import * as transformerUtil from './transformer_util';
 import {createNotEmittedStatementWithComments, createSingleQuoteStringLiteral} from './transformer_util';
 import * as typeTranslator from './type-translator';
 import * as ts from './typescript';
@@ -632,14 +633,15 @@ const FIELD_DECLARATION_MODIFIERS: ts.ModifierFlags = ts.ModifierFlags.Private |
  * declare these in Closure you must declare these separately from the class.
  */
 function createMemberTypeDeclaration(
-    context: JSDocTransformerContext, classDecl: ts.ClassDeclaration): ts.IfStatement|null {
+    context: JSDocTransformerContext,
+    typeDecl: ts.ClassDeclaration|ts.InterfaceDeclaration): ts.IfStatement|null {
   // Gather parameter properties from the constructor, if it exists.
   const ctors: ts.ConstructorDeclaration[] = [];
   let paramProps: ts.ParameterDeclaration[] = [];
   const nonStaticProps: ts.PropertyDeclaration[] = [];
   const staticProps: ts.PropertyDeclaration[] = [];
   const abstractMethods: ts.FunctionLikeDeclaration[] = [];
-  for (const member of classDecl.members) {
+  for (const member of typeDecl.members) {
     if (member.kind === ts.SyntaxKind.Constructor) {
       ctors.push(member as ts.ConstructorDeclaration);
     } else if (member.kind === ts.SyntaxKind.PropertyDeclaration) {
@@ -651,8 +653,10 @@ function createMemberTypeDeclaration(
         nonStaticProps.push(prop);
       }
     } else if (
-        hasModifierFlag(member, ts.ModifierFlags.Abstract) &&
+        (hasModifierFlag(member, ts.ModifierFlags.Abstract) ||
+         ts.isInterfaceDeclaration(typeDecl)) &&
         (member.kind === ts.SyntaxKind.MethodDeclaration ||
+         member.kind === ts.SyntaxKind.MethodSignature ||
          member.kind === ts.SyntaxKind.GetAccessor || member.kind === ts.SyntaxKind.SetAccessor)) {
       abstractMethods.push(
           member as ts.MethodDeclaration | ts.GetAccessorDeclaration | ts.SetAccessorDeclaration);
@@ -671,9 +675,9 @@ function createMemberTypeDeclaration(
     return null;
   }
 
-  if (!classDecl.name) return null;
+  if (!typeDecl.name) return null;
 
-  const className = getIdentifierText(classDecl.name);
+  const className = getIdentifierText(typeDecl.name);
   const staticPropAccess = ts.createIdentifier(className);
   const instancePropAccess = ts.createPropertyAccess(staticPropAccess, 'prototype');
   const propertyDecls = [
@@ -694,13 +698,17 @@ function createMemberTypeDeclaration(
     const abstractFnDecl = ts.createStatement(ts.createAssignment(
         ts.createPropertyAccess(instancePropAccess, name),
         ts.createFunctionExpression(
-            /* modifiers */ undefined, /* asterisk */ undefined, /* name */ undefined,
+            /* modifiers */ undefined,
+            /* asterisk */ undefined,
+            /* name */ undefined,
             /* typeParameters */ undefined,
             paramNames.map(
                 n => ts.createParameter(
                     /* decorators */ undefined, /* modifiers */ undefined,
                     /* dotDotDot */ undefined, n)),
-            undefined, ts.createBlock([]))));
+            undefined,
+            ts.createBlock([]),
+            )));
     jsdoc.addJSDocComment(abstractFnDecl, tags);
     propertyDecls.push(ts.setOriginalNode(abstractFnDecl, fnDecl));
   }
@@ -769,12 +777,10 @@ function getParameterName(param: ts.ParameterDeclaration, index: number): string
   }
 }
 
-
 /** Removes comment metacharacters from a string, to make it safe to embed in a comment. */
 function escapeForComment(str: string): string {
   return str.replace(/\/\*/g, '__').replace(/\*\//g, '__');
 }
-
 
 function createClosurePropertyDeclaration(
     context: JSDocTransformerContext, expr: ts.Expression,
@@ -835,7 +841,6 @@ export function jsdocTransformer(
         if (!host.untyped) {
           maybeAddHeritageClauses(docTags, jsdContext, classDecl);
         }
-
         if (docTags.length > 0) {
           jsdoc.addJSDocComment(classDecl, docTags);
         }
@@ -845,10 +850,52 @@ export function jsdocTransformer(
         return decls;
       }
 
+      function visitInterfaceDeclaration(iface: ts.InterfaceDeclaration): ts.Statement[] {
+        const sym = typeChecker.getSymbolAtLocation(iface.name);
+        if (!sym) {
+          jsdContext.error(iface, 'interface with no symbol');
+          return [];
+        }
+        // If this symbol is both a type and a value, we cannot emit both into Closure's
+        // single namespace.
+        if (sym.flags & ts.SymbolFlags.Value) {
+          return [transformerUtil.createSingleLineComment(
+              iface, 'interface has both a type and a value, skipping emit')];
+        }
+
+        const docTags = jsdContext.getJSDoc(iface) || [];
+        docTags.push({tagName: 'record'});
+        maybeAddTemplateClause(docTags, iface);
+        if (!host.untyped) {
+          maybeAddHeritageClauses(docTags, jsdContext, iface);
+        }
+        const name = getIdentifierText(iface.name);
+        const modifiers = hasModifierFlag(iface, ts.ModifierFlags.Export) ?
+            [ts.createToken(ts.SyntaxKind.ExportKeyword)] :
+            undefined;
+        const decl = ts.setOriginalNode(
+            ts.createFunctionDeclaration(
+                /* decorators */ undefined,
+                modifiers,
+                /* asterisk */ undefined,
+                name,
+                /* typeParameters */ undefined,
+                /* parameters */[],
+                /* type */ undefined,
+                /* body */ ts.createBlock([]),
+                ),
+            iface);
+        jsdoc.addJSDocComment(decl, docTags);
+        const memberDecl = createMemberTypeDeclaration(jsdContext, iface);
+        return memberDecl ? [decl, memberDecl] : [decl];
+      }
+
       function visitor(node: ts.Node): ts.Node|ts.Node[] {
         switch (node.kind) {
           case ts.SyntaxKind.ClassDeclaration:
             return visitClassDeclaration(node as ts.ClassDeclaration);
+          case ts.SyntaxKind.InterfaceDeclaration:
+            return visitInterfaceDeclaration(node as ts.InterfaceDeclaration);
           default:
             break;
         }

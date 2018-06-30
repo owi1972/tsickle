@@ -697,3 +697,17 @@ export function createSingleQuoteStringLiteral(text: string): ts.StringLiteral {
   (stringLiteral as any).singleQuote = true;
   return stringLiteral;
 }
+
+/** Creates a not emitted statement with the given text as a single line comment. */
+export function createSingleLineComment(original: ts.Node, text: string) {
+  const notEmitted = ts.createNotEmittedStatement(original);
+  const comment: ts.SynthesizedComment = {
+    kind: ts.SyntaxKind.SingleLineCommentTrivia,
+    text: ' ' + text,
+    hasTrailingNewLine: true,
+    pos: -1,
+    end: -1,
+  };
+  ts.setSyntheticTrailingComments(notEmitted, [comment]);
+  return notEmitted;
+}
