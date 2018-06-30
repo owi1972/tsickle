@@ -23,6 +23,7 @@ import {createCustomTransformers} from './transformer_util';
 import * as typeTranslator from './type-translator';
 import * as ts from './typescript';
 import {hasModifierFlag, isDtsFileName} from './util';
+import { jsdocTransformer } from './jsdoc_transformer';
 
 export {FileMap, ModulesManifest} from './modules_manifest';
 
@@ -1932,12 +1933,7 @@ export function emitWithTsickle(
   const tsickleSourceTransformers: Array<ts.TransformerFactory<ts.SourceFile>> = [];
   if (host.transformTypesToClosure) {
     // Note: tsickle.annotate can also lower decorators in the same run.
-    tsickleSourceTransformers.push(createTransformerFromSourceMap((sourceFile, sourceMapper) => {
-      const {output, diagnostics} =
-          annotate(typeChecker, sourceFile, host, tsHost, tsOptions, sourceMapper);
-      tsickleDiagnostics.push(...diagnostics);
-      return output;
-    }));
+    tsickleSourceTransformers.push(jsdocTransformer(host, typeChecker, tsickleDiagnostics));
     tsickleSourceTransformers.push(enumTransformer(typeChecker, tsickleDiagnostics));
     // Only add @suppress {checkTypes} comments when also adding type annotations.
     tsickleSourceTransformers.push(transformFileoverviewComment);

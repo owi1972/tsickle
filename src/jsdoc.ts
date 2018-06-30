@@ -6,6 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import * as ts from './typescript';
 import {normalizeLineEndings} from './util';
 
 /**
@@ -124,6 +125,20 @@ export interface ParsedJSDocComment {
   tags: Tag[];
   warnings?: string[];
 }
+
+/** Adds the given JSDoc tags to the given node, as a synthetic comment. */
+export function addJSDocComment(node: ts.Node, docTags: Tag[], escapeExtraTags?: Set<string>) {
+  const text = toStringWithoutStartEnd(docTags, escapeExtraTags);
+  const comment: ts.SynthesizedComment = {
+    kind: ts.SyntaxKind.MultiLineCommentTrivia,
+    text,
+    hasTrailingNewLine: true,
+    pos: -1,
+    end: -1,
+  };
+  ts.setSyntheticLeadingComments(node, [comment]);
+}
+
 
 /**
  * parse parses JSDoc out of a comment string.
@@ -285,7 +300,8 @@ function serialize(
         (!tag.text || !tag.text.match('\n'))) {
       // Special-case one-liner "type" and "nocollapse" tags to fit on one line, e.g.
       //   /** @type {foo} */
-      return '/**' + tagToString(tag, escapeExtraTags) + ' */\n';
+      const text = tagToString(tag, escapeExtraTags);
+      return  includeStartEnd ? `/** ${text} */` : `*${text} `;
     }
     // Otherwise, fall through to the multi-line output.
   }

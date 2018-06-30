@@ -22,6 +22,7 @@ ts_library(
         "fileoverview_comment_transformer.ts",
         "googmodule.ts",
         "jsdoc.ts",
+        "jsdoc_transformer.ts",
         "main.ts",
         "modules_manifest.ts",
         "rewriter.ts",
