@@ -23,7 +23,7 @@ const FILEOVERVIEW_COMMENT_MARKERS: ReadonlySet<string> =
  * Note that this is different from TypeScript's understanding of the concept, where a file comment
  * is a comment separated from the rest of the file by a double newline.
  */
-export function isClosureFileoverviewComment(text: string) {
+export function isClosureFileoverviewComment(text: ts.SynthesizedComment) {
   const current = jsdoc.parse(text);
   return current !== null && current.tags.some(t => FILEOVERVIEW_COMMENT_MARKERS.has(t.tagName));
 }

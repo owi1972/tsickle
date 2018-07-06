@@ -6,8 +6,6 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-
-
 import {hasExportingDecorator} from './decorators';
 import * as googmodule from './googmodule';
 import * as jsdoc from './jsdoc';
@@ -67,20 +65,20 @@ class MutableJSDoc {
     comments.push(comment);
     ts.setSyntheticLeadingComments(this.node, comments);
   }
+}
 
-  addCommentOn(other: ts.Node, escapeExtraTags?: Set<string>) {
-    const text = jsdoc.toStringWithoutStartEnd(this.tags, escapeExtraTags);
-    const comment: ts.SynthesizedComment = {
-      kind: ts.SyntaxKind.MultiLineCommentTrivia,
-      text,
-      pos: -1,
-      end: -1,
-      hasTrailingNewLine: true,
-    };
-    const comments = ts.getSyntheticLeadingComments(other) || [];
-    comments.push(comment);
-    ts.setSyntheticLeadingComments(other, comments);
-  }
+function addCommentOn(node: ts.Node, tags: jsdoc.Tag[], escapeExtraTags?: Set<string>) {
+  const text = jsdoc.toStringWithoutStartEnd(tags, escapeExtraTags);
+  const comment: ts.SynthesizedComment = {
+    kind: ts.SyntaxKind.MultiLineCommentTrivia,
+    text,
+    pos: -1,
+    end: -1,
+    hasTrailingNewLine: true,
+  };
+  const comments = ts.getSyntheticLeadingComments(node) || [];
+  comments.push(comment);
+  ts.setSyntheticLeadingComments(node, comments);
 }
 
 class JSDocTransformerContext {
@@ -309,16 +307,23 @@ class JSDocTransformerContext {
     this.forwardDeclare(sf.fileName, moduleSymbol);
   }
 
+  getJSDoc(node: ts.Node): jsdoc.Tag[] {
+    const [tags, ] = this.parseJSDoc(node);
+    return tags;
+  }
+
   getMutableJSDoc(node: ts.Node): MutableJSDoc {
-    function newSyntheticComment() {
-      return new MutableJSDoc(node, null, []);
-    }
+    const [tags, comment] = this.parseJSDoc(node);
+    return new MutableJSDoc(node, comment, tags);
+  }
+
+  private parseJSDoc(node: ts.Node): [jsdoc.Tag[], ts.SynthesizedComment|null] {
     const text = node.getFullText();
     const comments = jsdoc.syntheticLeadingComments(node);
-    if (!comments || comments.length === 0) return newSyntheticComment();
+    if (!comments || comments.length === 0) return [[], null];
 
     for (let i = comments.length - 1; i >= 0; i--) {
-      const parsed = jsdoc.parse(comments[i].text);
+      const parsed = jsdoc.parse(comments[i]);
       if (parsed) {
         if (parsed.warnings) {
           this.diagnostics.push({
@@ -330,10 +335,15 @@ class JSDocTransformerContext {
             code: 0,
           });
         }
-        return new MutableJSDoc(node, comments[i], parsed.tags);
+        return [parsed.tags, comments[i]];
       }
     }
-    return newSyntheticComment();
+    return [[], null];
+  }
+
+  blacklistTypeParameters(
+      context: ts.Node, decls: ReadonlyArray<ts.TypeParameterDeclaration>|undefined) {
+    this.newTypeTranslator(context).blacklistTypeParameters(this.symbolsToAliasedNames, decls);
   }
 }
 
@@ -472,19 +482,17 @@ function getFunctionTypeJSDoc(
   const returnTags: jsdoc.Tag[] = [];
   const typeParameterNames = new Set<string>();
 
-  let firstDoc: MutableJSDoc|null = null;
   for (const fnDecl of fnDecls) {
     // Construct the JSDoc comment by reading the existing JSDoc, if
     // any, and merging it with the known types of the function
     // parameters and return type.
-    const mjsdoc = context.getMutableJSDoc(fnDecl);
-    if (!firstDoc) firstDoc = mjsdoc;
+    const tags = context.getJSDoc(fnDecl);
 
     // Copy all the tags other than @param/@return into the new
     // JSDoc without any change; @param/@return are handled specially.
     // TODO: there may be problems if an annotation doesn't apply to all overloads;
     // is it worth checking for this and erroring?
-    for (const tag of mjsdoc.tags) {
+    for (const tag of tags) {
       if (tag.tagName === 'param' || tag.tagName === 'return') continue;
       newDoc.push(tag);
     }
@@ -533,7 +541,7 @@ function getFunctionTypeJSDoc(
       }
       newTag.type = context.typeToClosure(fnDecl, type);
 
-      for (const {tagName, parameterName, text} of mjsdoc.tags) {
+      for (const {tagName, parameterName, text} of tags) {
         if (tagName === 'param' && parameterName === newTag.parameterName) {
           newTag.text = text;
           break;
@@ -548,7 +556,7 @@ function getFunctionTypeJSDoc(
       const retType = typeChecker.getReturnTypeOfSignature(sig);
       const retTypeString: string = context.typeToClosure(fnDecl, retType);
       let returnDoc: string|undefined;
-      for (const {tagName, text} of mjsdoc.tags) {
+      for (const {tagName, text} of tags) {
         if (tagName === 'return') {
           returnDoc = text;
           break;
@@ -786,16 +794,16 @@ function createClosurePropertyDeclaration(
   // so the Closure type must be ?|undefined.
   if (prop.questionToken && type === '?') type += '|undefined';
 
-  const mjsdoc = context.getMutableJSDoc(prop);
-  mjsdoc.tags.push({tagName: 'type', type});
+  const tags = context.getJSDoc(prop);
+  tags.push({tagName: 'type', type});
   if (hasExportingDecorator(prop, context.typeChecker)) {
-    mjsdoc.tags.push({tagName: 'export'});
+    tags.push({tagName: 'export'});
   }
+  const declStmt =
+      ts.setSourceMapRange(ts.createStatement(ts.createPropertyAccess(expr, name)), prop);
   // Avoid printing annotations that can conflict with @type
   // This avoids Closure's error "type annotation incompatible with other annotations"
-  const declStmt =
-      ts.setOriginalNode(ts.createStatement(ts.createPropertyAccess(expr, name)), prop);
-  mjsdoc.addCommentOn(declStmt, jsdoc.TAGS_CONFLICTING_WITH_TYPE);
+  addCommentOn(declStmt, tags, jsdoc.TAGS_CONFLICTING_WITH_TYPE);
   return declStmt;
 }
 
@@ -824,7 +832,7 @@ export function jsdocTransformer(
         if (mjsdoc.tags.length > 0) {
           mjsdoc.updateComment();
         }
-        const decls: ts.Statement[] = [classDecl];
+        const decls: ts.Statement[] = [ts.visitEachChild(classDecl, visitor, context)];
         const memberDecl = createMemberTypeDeclaration(jsdContext, classDecl);
         if (memberDecl) decls.push(memberDecl);
         return decls;
@@ -844,11 +852,11 @@ export function jsdocTransformer(
               iface, 'interface has both a type and a value, skipping emit')];
         }
 
-        const mjsdoc = jsdContext.getMutableJSDoc(iface) || [];
-        mjsdoc.tags.push({tagName: 'record'});
-        maybeAddTemplateClause(mjsdoc.tags, iface);
+        const tags = jsdContext.getJSDoc(iface) || [];
+        tags.push({tagName: 'record'});
+        maybeAddTemplateClause(tags, iface);
         if (!host.untyped) {
-          maybeAddHeritageClauses(mjsdoc.tags, jsdContext, iface);
+          maybeAddHeritageClauses(tags, jsdContext, iface);
         }
         const name = getIdentifierText(iface.name);
         const modifiers = hasModifierFlag(iface, ts.ModifierFlags.Export) ?
@@ -866,7 +874,7 @@ export function jsdocTransformer(
                 /* body */ ts.createBlock([]),
                 ),
             iface);
-        mjsdoc.addCommentOn(decl);
+        addCommentOn(decl, tags);
         const memberDecl = createMemberTypeDeclaration(jsdContext, iface);
         return memberDecl ? [decl, memberDecl] : [decl];
       }
@@ -877,6 +885,27 @@ export function jsdocTransformer(
             return visitClassDeclaration(node as ts.ClassDeclaration);
           case ts.SyntaxKind.InterfaceDeclaration:
             return visitInterfaceDeclaration(node as ts.InterfaceDeclaration);
+          case ts.SyntaxKind.FunctionDeclaration:
+          case ts.SyntaxKind.MethodDeclaration:
+          case ts.SyntaxKind.GetAccessor:
+          case ts.SyntaxKind.SetAccessor:
+            const fnDecl = node as ts.FunctionLikeDeclaration;
+
+            if (!fnDecl.body) {
+              // Two cases: abstract methods and overloaded methods/functions.
+              // Abstract methods are handled in emitTypeAnnotationsHandler.
+              // Overloads are union-ized into the shared type in emitFunctionType.
+              break;
+            }
+            const extraTags = [];
+            if (hasExportingDecorator(fnDecl, typeChecker)) extraTags.push({tagName: 'export'});
+
+            const [tags, ] = getFunctionTypeJSDoc(jsdContext, [fnDecl], extraTags);
+            const mjsdoc = jsdContext.getMutableJSDoc(fnDecl);
+            mjsdoc.tags = tags;
+            mjsdoc.updateComment();
+            jsdContext.blacklistTypeParameters(fnDecl, fnDecl.typeParameters);
+            break;
           default:
             break;
         }

@@ -46,12 +46,12 @@ export abstract class Rewriter {
       // check comments in the new output, as those (in particular for comments) are unrelated.
       let insertionIdx = 0;
       for (const cr of ts.getLeadingCommentRanges(out, 0) || []) {
-        if (isClosureFileoverviewComment(out.substring(cr.pos, cr.end))) {
-          insertionIdx = cr.end;
-          // Include space (in particular line breaks) after a @fileoverview comment; without the
-          // space seperating it, TypeScript might elide the emit.
-          while (insertionIdx < out.length && out[insertionIdx].match(/\s/)) insertionIdx++;
-        }
+        // if (isClosureFileoverviewComment(out.substring(cr.pos, cr.end))) {
+        //   insertionIdx = cr.end;
+        //   // Include space (in particular line breaks) after a @fileoverview comment; without the
+        //   // space seperating it, TypeScript might elide the emit.
+        //   while (insertionIdx < out.length && out[insertionIdx].match(/\s/)) insertionIdx++;
+        // }
       }
       out = out.substring(0, insertionIdx) + prefix + out.substring(insertionIdx);
       this.sourceMapper.shiftByOffset(prefix.length);

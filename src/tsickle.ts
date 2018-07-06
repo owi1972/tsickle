@@ -389,47 +389,49 @@ abstract class ClosureRewriter extends Rewriter {
     const comments = ts.getLeadingCommentRanges(text, 0);
 
     if (!comments || comments.length === 0) return null;
-
+    return null;
     // We need to search backwards for the first JSDoc comment to avoid ignoring such when another
     // code-level comment is between that comment and the function declaration (see
     // testfiles/doc_params for an example).
-    let docRelativePos = 0;
-    let parsed: jsdoc.ParsedJSDocComment|null = null;
-    for (let i = comments.length - 1; i >= 0; i--) {
-      const {pos, end} = comments[i];
-      // end is relative within node.getFullText(), add getFullStart to obtain coordinates that are
-      // comparable to node positions.
-      const docRelativeEnd = end + node.getFullStart();
-      if (docRelativeEnd <= this.file.getStart() &&
-          this.file.text.substring(docRelativeEnd).startsWith('\n\n')) {
-        // This comment is at the very beginning of the file and there's an empty line between the
-        // comment and this node, it's a "detached comment". That means we should treat it as a
-        // file-level comment, not attached to this code node.
-        return null;
-      }
+    // let docRelativePos = 0;
+    // let parsed: jsdoc.ParsedJSDocComment|null = null;
+    // for (let i = comments.length - 1; i >= 0; i--) {
+    //   const {pos, end} = comments[i];
+    //   // end is relative within node.getFullText(), add getFullStart to obtain coordinates that
+    //   are
+    //   // comparable to node positions.
+    //   const docRelativeEnd = end + node.getFullStart();
+    //   if (docRelativeEnd <= this.file.getStart() &&
+    //       this.file.text.substring(docRelativeEnd).startsWith('\n\n')) {
+    //     // This comment is at the very beginning of the file and there's an empty line between
+    //     the
+    //     // comment and this node, it's a "detached comment". That means we should treat it as a
+    //     // file-level comment, not attached to this code node.
+    //     return null;
+    //   }
 
-      const comment = text.substring(pos, end);
-      parsed = jsdoc.parse(comment);
-      if (parsed) {
-        docRelativePos = node.getFullStart() + pos;
-        break;
-      }
-    }
+    //   const comment = text.substring(pos, end);
+    //   // parsed = null; jsdoc.parse(comment);
+    //   if (parsed) {
+    //     docRelativePos = node.getFullStart() + pos;
+    //     break;
+    //   }
+    // }
 
-    if (!parsed) return null;
+    // if (!parsed) return null;
 
-    if (parsed.warnings) {
-      const start = docRelativePos;
-      this.diagnostics.push({
-        file: this.file,
-        start,
-        length: node.getStart() - start,
-        messageText: parsed.warnings.join('\n'),
-        category: ts.DiagnosticCategory.Warning,
-        code: 0,
-      });
-    }
-    return parsed.tags;
+    // if (parsed.warnings) {
+    //   const start = docRelativePos;
+    //   this.diagnostics.push({
+    //     file: this.file,
+    //     start,
+    //     length: node.getStart() - start,
+    //     messageText: parsed.warnings.join('\n'),
+    //     category: ts.DiagnosticCategory.Warning,
+    //     code: 0,
+    //   });
+    // }
+    // return parsed.tags;
   }
 
   maybeAddTemplateClause(docTags: jsdoc.Tag[], decl: HasTypeParameters) {

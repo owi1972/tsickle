@@ -134,15 +134,15 @@ export interface ParsedJSDocComment {
 // such as merging (below), de-duplicating certain tags (@deprecated), and special treatment for
 // others (e.g. @suppress). We should introduce a proper model class with a more suitable data
 // strucure (e.g. a Map<TagName, Values[]>).
-export function parse(comment: string): ParsedJSDocComment|null {
-  // Make sure we have proper line endings before parsing on Windows.
-  comment = normalizeLineEndings(comment);
+export function parse(comment: ts.SynthesizedComment): ParsedJSDocComment|null {
   // TODO(evanm): this is a pile of hacky regexes for now, because we
   // would rather use the better TypeScript implementation of JSDoc
   // parsing.  https://github.com/Microsoft/TypeScript/issues/7393
-  const match = comment.match(/^\/\*\*([\s\S]*?)\*\/$/);
-  if (!match) return null;
-  return parseContents(match[1].trim());
+  if (comment.kind !== ts.SyntaxKind.MultiLineCommentTrivia) return null;
+  // comment.text does not include /* and */, so must start with '*' for JSDoc.
+  if (comment.text[0] !== '*') return null;
+  const text = comment.text.substring(1).trim();
+  return parseContents(text);
 }
 
 /**
@@ -271,24 +271,37 @@ export function syntheticLeadingComments(node: ts.Node) {
   const existing = ts.getSyntheticLeadingComments(node);
   if (existing) return existing;
   const text = node.getFullText();
+  const synthComments = getLeadingCommentRangesSynthesized(text);
+  if (synthComments.length) {
+    ts.setSyntheticLeadingComments(node, synthComments);
+    suppressCommentsRecursively(node);
+  }
+  return synthComments;
+}
+
+export function getLeadingCommentRangesSynthesized(text: string) {
   const comments = ts.getLeadingCommentRanges(text, 0) || [];
-  const synthComments = comments.map((cr): ts.SynthesizedComment => {
+  return comments.map((cr): ts.SynthesizedComment => {
     const commentText = cr.kind === ts.SyntaxKind.SingleLineCommentTrivia ?
         text.substring(cr.pos + 2, cr.end) :
         text.substring(cr.pos + 2, cr.end - 2);
     return {...cr, text: commentText, pos: -1, end: -1};
   });
-  ts.setSyntheticLeadingComments(node, synthComments);
-  suppressCommentsRecursively(node);
-  return synthComments;
 }
 
-export function suppressCommentsRecursively(node: ts.Node): boolean {
-  ts.setEmitFlags(node, ts.EmitFlags.NoLeadingComments);
-  return !!ts.forEachChild(node, (child) => {
-    if (child.pos > node.pos) return true;
-    return suppressCommentsRecursively(child);
-  });
+export function suppressCommentsRecursively(node: ts.Node) {
+  const originalStart = node.getFullStart();
+  const actualStart = node.getStart();
+
+  function suppressCommentsInternal(node: ts.Node): boolean {
+    ts.setEmitFlags(node, ts.EmitFlags.NoLeadingComments);
+    ts.setTextRange(node, {pos: actualStart, end: node.getEnd()});
+    return !!ts.forEachChild(node, (child) => {
+      if (child.pos !== originalStart) return true;
+      return suppressCommentsInternal(child);
+    });
+  }
+  suppressCommentsInternal(node);
 }
 
 export function toSynthesizedComment(tags: Tag[]): ts.SynthesizedComment {
