@@ -9,6 +9,6 @@ var module = module || { id: 'test_files/coerce/coerce.ts' };
  * @return {string}
  */
 function acceptString(arg) { return arg; }
-acceptString(/** @type {?} */ (3));
-acceptString(/** @type {?} */ (3));
+acceptString((/** @type {?} */ (3)));
+acceptString((/** @type {?} */ (3)));
 acceptString(`${(/** @type {?} */ (3))}`);

@@ -80,6 +80,7 @@ function addCommentOn(node: ts.Node, tags: jsdoc.Tag[], escapeExtraTags?: Set<st
   const comments = ts.getSyntheticLeadingComments(node) || [];
   comments.push(comment);
   ts.setSyntheticLeadingComments(node, comments);
+  return comment;
 }
 
 class JSDocTransformerContext {
@@ -1020,6 +1021,13 @@ export function jsdocTransformer(
         return [decl];
       }
 
+      /** Emits a parenthesized Closure cast: `(/** \@type ... * / (expr))`. */
+      function visitAssertionExpression(assertion: ts.AssertionExpression) {
+        const inner = ts.createParen(assertion.expression);
+        const comment = addCommentOn(inner, [{tagName: 'type', type: jsdContext.typeToClosure(assertion.type)}]);
+        comment.hasTrailingNewLine = false;
+        return ts.createParen(inner);
+      }
 
       function visitor(node: ts.Node): ts.Node|ts.Node[] {
         switch (node.kind) {
@@ -1049,6 +1057,9 @@ export function jsdocTransformer(
             break;
           case ts.SyntaxKind.TypeAliasDeclaration:
             return visitTypeAliasDeclaration(node as ts.TypeAliasDeclaration);
+          case ts.SyntaxKind.TypeAssertionExpression:
+          case ts.SyntaxKind.AsExpression:
+            return visitAssertionExpression(node as ts.AssertionExpression);
           default:
             break;
         }
