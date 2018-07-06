@@ -267,7 +267,12 @@ const SINGLETON_TAGS = new Set(['deprecated']);
 /** Tags that conflict with \@type in Closure Compiler (e.g. \@param). */
 export const TAGS_CONFLICTING_WITH_TYPE = new Set(['param', 'return']);
 
-export function syntheticLeadingComments(node: ts.Node) {
+/**
+ * synthesizeLeadingComments parses the leading comments of node, converts them
+ * to synthetic comments, and makes sure the original text comments do not get
+ * emitted by TypeScript.
+ */
+export function synthesizeLeadingComments(node: ts.Node) {
   const existing = ts.getSyntheticLeadingComments(node);
   if (existing) return existing;
   const text = node.getFullText();
@@ -279,9 +284,16 @@ export function syntheticLeadingComments(node: ts.Node) {
   return synthComments;
 }
 
+/**
+ * parseLeadingCommentRangesSynthesized parses the leading comment ranges out of the given text and
+ * converts them to SynthesizedComments.
+ */
+// VisibleForTesting
 export function getLeadingCommentRangesSynthesized(text: string) {
   const comments = ts.getLeadingCommentRanges(text, 0) || [];
   return comments.map((cr): ts.SynthesizedComment => {
+    // Confusingly, CommentRange in TypeScript includes start and end markers, but
+    // SynthesizedComments do not.
     const commentText = cr.kind === ts.SyntaxKind.SingleLineCommentTrivia ?
         text.substring(cr.pos + 2, cr.end) :
         text.substring(cr.pos + 2, cr.end - 2);

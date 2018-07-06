@@ -319,7 +319,7 @@ class JSDocTransformerContext {
 
   private parseJSDoc(node: ts.Node): [jsdoc.Tag[], ts.SynthesizedComment|null] {
     const text = node.getFullText();
-    const comments = jsdoc.syntheticLeadingComments(node);
+    const comments = jsdoc.synthesizeLeadingComments(node);
     if (!comments || comments.length === 0) return [[], null];
 
     for (let i = comments.length - 1; i >= 0; i--) {
