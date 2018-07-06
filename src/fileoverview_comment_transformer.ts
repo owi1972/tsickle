@@ -85,11 +85,11 @@ export function transformFileoverviewComment(context: ts.TransformationContext):
       // In an empty source file, all comments are file-level comments.
       comments = synthesizeCommentRanges(sf, originalComments);
     } else {
-      // Search for the last comment split from the file with a \n\n. All comments before that are
+      // Search for the first comment split from the file with a \n\n. All comments before that are
       // considered fileoverview comments, all comments after that belong to the next statement(s).
       // If none found, comments remains empty, and the code below will insert a new fileoverview
       // comment.
-      for (let i = originalComments.length - 1; i >= 0; i--) {
+      for (let i = 0; i < originalComments.length; i++) {
         const end = originalComments[i].end;
         if (!text.substring(end).startsWith('\n\n')) continue;
         // This comment is separated from the source file with a double break, marking it (and any

@@ -57,11 +57,29 @@ class MutableJSDoc {
       return;
     }
 
-    const comment: ts.SynthesizedComment =
-        {kind: ts.SyntaxKind.MultiLineCommentTrivia, text: '', pos: -1, end: -1};
+    const comment: ts.SynthesizedComment = {
+      kind: ts.SyntaxKind.MultiLineCommentTrivia,
+      text,
+      pos: -1,
+      end: -1,
+    };
     const comments = ts.getSyntheticLeadingComments(this.node) || [];
     comments.push(comment);
     ts.setSyntheticLeadingComments(this.node, comments);
+  }
+
+  addCommentOn(other: ts.Node, escapeExtraTags?: Set<string>) {
+    const text = jsdoc.toStringWithoutStartEnd(this.tags, escapeExtraTags);
+    const comment: ts.SynthesizedComment = {
+      kind: ts.SyntaxKind.MultiLineCommentTrivia,
+      text,
+      pos: -1,
+      end: -1,
+      hasTrailingNewLine: true,
+    };
+    const comments = ts.getSyntheticLeadingComments(other) || [];
+    comments.push(comment);
+    ts.setSyntheticLeadingComments(other, comments);
   }
 }
 
@@ -777,7 +795,7 @@ function createClosurePropertyDeclaration(
   // This avoids Closure's error "type annotation incompatible with other annotations"
   const declStmt =
       ts.setOriginalNode(ts.createStatement(ts.createPropertyAccess(expr, name)), prop);
-  mjsdoc.updateComment(jsdoc.TAGS_CONFLICTING_WITH_TYPE);
+  mjsdoc.addCommentOn(declStmt, jsdoc.TAGS_CONFLICTING_WITH_TYPE);
   return declStmt;
 }
 
@@ -813,6 +831,7 @@ export function jsdocTransformer(
       }
 
       function visitInterfaceDeclaration(iface: ts.InterfaceDeclaration): ts.Statement[] {
+        if (host.untyped) return [];
         const sym = typeChecker.getSymbolAtLocation(iface.name);
         if (!sym) {
           jsdContext.error(iface, 'interface with no symbol');
@@ -847,7 +866,7 @@ export function jsdocTransformer(
                 /* body */ ts.createBlock([]),
                 ),
             iface);
-        mjsdoc.updateComment();
+        mjsdoc.addCommentOn(decl);
         const memberDecl = createMemberTypeDeclaration(jsdContext, iface);
         return memberDecl ? [decl, memberDecl] : [decl];
       }
