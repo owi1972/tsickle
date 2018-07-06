@@ -58,6 +58,7 @@ class MutableJSDoc {
     const comment: ts.SynthesizedComment = {
       kind: ts.SyntaxKind.MultiLineCommentTrivia,
       text,
+      hasTrailingNewLine: true,
       pos: -1,
       end: -1,
     };
@@ -832,8 +833,11 @@ export function jsdocTransformer(
         if (mjsdoc.tags.length > 0) {
           mjsdoc.updateComment();
         }
-        const decls: ts.Statement[] = [ts.visitEachChild(classDecl, visitor, context)];
+        const decls: ts.Statement[] = [];
         const memberDecl = createMemberTypeDeclaration(jsdContext, classDecl);
+        // WARNING: order is significant; we must create the member decl before transforming away
+        // parameter property comments when visiting the constructor.
+        decls.push(ts.visitEachChild(classDecl, visitor, context));
         if (memberDecl) decls.push(memberDecl);
         return decls;
       }
@@ -902,11 +906,23 @@ export function jsdocTransformer(
             return visitClassDeclaration(node as ts.ClassDeclaration);
           case ts.SyntaxKind.InterfaceDeclaration:
             return visitInterfaceDeclaration(node as ts.InterfaceDeclaration);
+          case ts.SyntaxKind.Constructor:
           case ts.SyntaxKind.FunctionDeclaration:
           case ts.SyntaxKind.MethodDeclaration:
           case ts.SyntaxKind.GetAccessor:
           case ts.SyntaxKind.SetAccessor:
             addJsDocToFunctionLikeDeclaration(node as ts.FunctionLikeDeclaration);
+            break;
+          case ts.SyntaxKind.Parameter:
+            // Parameter properties (e.g. `constructor(/** docs */ private foo: string)`) might have
+            // JSDoc comments, including JSDoc tags recognized by Closure Compiler. Prevent emitting
+            // any comments on them, so that Closure doesn't error on them.
+            // See test_files/parameter_properties.ts.
+            const paramDecl = node as ts.ParameterDeclaration;
+            if (hasModifierFlag(paramDecl, ts.ModifierFlags.ParameterPropertyModifier)) {
+              ts.setSyntheticLeadingComments(paramDecl, []);
+              jsdoc.suppressLeadingCommentsRecursively(paramDecl);
+            }
             break;
           default:
             break;

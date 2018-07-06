@@ -279,7 +279,7 @@ export function synthesizeLeadingComments(node: ts.Node) {
   const synthComments = getLeadingCommentRangesSynthesized(text);
   if (synthComments.length) {
     ts.setSyntheticLeadingComments(node, synthComments);
-    suppressCommentsRecursively(node);
+    suppressLeadingCommentsRecursively(node);
   }
   return synthComments;
 }
@@ -301,10 +301,19 @@ export function getLeadingCommentRangesSynthesized(text: string) {
   });
 }
 
-export function suppressCommentsRecursively(node: ts.Node) {
+/**
+ * suppressCommentsRecursively prevents emit of leading comments on node, and any recursive nodes
+ * underneath it that start at the same offset.
+ */
+export function suppressLeadingCommentsRecursively(node: ts.Node) {
+  // TypeScript emits leading comments on a node, unless:
+  // - the comment was emitted by the parent node
+  // - the node has the NoLeadingComments emit flag.
+  // However, transformation steps sometimes copy nodes without keeping their emit flags, so just
+  // setting NoLeadingComments recursively is not enough, we must also set the text range to avoid
+  // the copied node to have comments emitted.
   const originalStart = node.getFullStart();
   const actualStart = node.getStart();
-
   function suppressCommentsInternal(node: ts.Node): boolean {
     ts.setEmitFlags(node, ts.EmitFlags.NoLeadingComments);
     ts.setTextRange(node, {pos: actualStart, end: node.getEnd()});

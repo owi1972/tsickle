@@ -77,13 +77,13 @@ export function transformFileoverviewComment(context: ts.TransformationContext):
   return (sf: ts.SourceFile) => {
     const text = sf.getFullText();
 
-    let comments: ts.SynthesizedComment[] = [];
+    let fileComments: ts.SynthesizedComment[] = [];
     const firstStatement = sf.statements.length && sf.statements[0] || null;
 
     const originalComments = ts.getLeadingCommentRanges(text, 0) || [];
     if (!firstStatement) {
       // In an empty source file, all comments are file-level comments.
-      comments = synthesizeCommentRanges(sf, originalComments);
+      fileComments = synthesizeCommentRanges(sf, originalComments);
     } else {
       // Search for the first comment split from the file with a \n\n. All comments before that are
       // considered fileoverview comments, all comments after that belong to the next statement(s).
@@ -95,14 +95,14 @@ export function transformFileoverviewComment(context: ts.TransformationContext):
         // This comment is separated from the source file with a double break, marking it (and any
         // preceding comments) as a file-level comment. Split them off and attach them onto a
         // NotEmittedStatement, so that they do not get lost later on.
+        const synthesizedComments = jsdoc.synthesizeLeadingComments(firstStatement);
         const notEmitted = ts.createNotEmittedStatement(sf);
-        comments = synthesizeCommentRanges(sf, originalComments.slice(0, i + 1));
-        ts.setSyntheticLeadingComments(notEmitted, comments);
+        // Modify the comments on the firstStatement in place by removing the file-level comments.
+        fileComments = synthesizedComments.splice(0, i);
+        // Move the fileComments onto notEmitted.
+        ts.setSyntheticLeadingComments(notEmitted, fileComments);
         // TODO(martinprobst): consider checking here whether any of the trailing comments contains
         // an @fileoverview etc, and reporting an error if so.
-        ts.setSyntheticLeadingComments(
-            firstStatement, synthesizeCommentRanges(sf, originalComments.slice(i + 1)));
-        jsdoc.suppressCommentsRecursively(firstStatement);
         sf = updateSourceFileNode(
             sf, ts.createNodeArray([notEmitted, firstStatement, ...sf.statements.slice(1)]));
         break;
@@ -115,8 +115,8 @@ export function transformFileoverviewComment(context: ts.TransformationContext):
     // @fileoverview.
     let fileoverviewIdx = -1;
     let tags: jsdoc.Tag[] = [];
-    for (let i = comments.length - 1; i >= 0; i--) {
-      const parse = jsdoc.parseContents(comments[i].text);
+    for (let i = fileComments.length - 1; i >= 0; i--) {
+      const parse = jsdoc.parseContents(fileComments[i].text);
       if (parse !== null && parse.tags.some(t => FILEOVERVIEW_COMMENT_MARKERS.has(t.tagName))) {
         fileoverviewIdx = i;
         tags = parse.tags;
@@ -132,7 +132,7 @@ export function transformFileoverviewComment(context: ts.TransformationContext):
       return addNewFileoverviewComment(sf, commentText);
     }
 
-    comments[fileoverviewIdx].text = commentText;
+    fileComments[fileoverviewIdx].text = commentText;
     // sf does not need to be updated, synthesized comments are mutable.
     return sf;
   };
