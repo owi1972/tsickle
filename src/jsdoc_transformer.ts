@@ -309,11 +309,16 @@ class JSDocTransformerContext {
   }
 
   insertForwardDeclares(sourceFile: ts.SourceFile) {
-    const insertion =
-        sourceFile.statements.findIndex(s => s.kind !== ts.SyntaxKind.NotEmittedStatement) + 1;
+    let insertion = 0;
+    // Skip over a leading file comment holder.
+    if (sourceFile.statements.length &&
+        sourceFile.statements[0].kind === ts.SyntaxKind.NotEmittedStatement) {
+      insertion++;
+    }
     return ts.updateSourceFileNode(sourceFile, [
-      ...sourceFile.statements.slice(0, insertion), ...this.forwardDeclares,
-      ...sourceFile.statements.slice(insertion + 1)
+      ...sourceFile.statements.slice(0, insertion),
+      ...this.forwardDeclares,
+      ...sourceFile.statements.slice(insertion),
     ]);
   }
 
@@ -944,7 +949,7 @@ export function jsdocTransformer(
           }
           const newStmt = ts.createVariableStatement(
               varStmt.modifiers, ts.createVariableDeclarationList([decl], flags));
-          if (localTags.length) addCommentOn(newStmt, localTags);
+          if (localTags.length) addCommentOn(newStmt, localTags, jsdoc.TAGS_CONFLICTING_WITH_TYPE);
           stmts.push(newStmt);
         }
 
