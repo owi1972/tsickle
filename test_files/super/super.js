@@ -19,6 +19,7 @@ if (false) {
     /** @type {number} */
     SuperTestBaseOneArg.prototype.x;
 }
+// A ctor with a parameter property.
 class SuperTestDerivedParamProps extends SuperTestBaseOneArg {
     /**
      * @param {string} y
@@ -32,6 +33,7 @@ if (false) {
     /** @type {string} */
     SuperTestDerivedParamProps.prototype.y;
 }
+// A ctor with an initialized property.
 class SuperTestDerivedInitializedProps extends SuperTestBaseOneArg {
     constructor() {
         super(3);

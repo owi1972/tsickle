@@ -918,9 +918,11 @@ export function jsdocTransformer(
         if (hasExportingDecorator(fnDecl, typeChecker)) extraTags.push({tagName: 'export'});
 
         const [tags, ] = getFunctionTypeJSDoc(jsdContext, [fnDecl], extraTags);
-        const mjsdoc = jsdContext.getMutableJSDoc(fnDecl);
-        mjsdoc.tags = tags;
-        mjsdoc.updateComment();
+        if (tags.length) {
+          const mjsdoc = jsdContext.getMutableJSDoc(fnDecl);
+          mjsdoc.tags = tags;
+          mjsdoc.updateComment();
+        }
         jsdContext.blacklistTypeParameters(fnDecl, fnDecl.typeParameters);
       }
 
