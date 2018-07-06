@@ -879,6 +879,23 @@ export function jsdocTransformer(
         return memberDecl ? [decl, memberDecl] : [decl];
       }
 
+      function addJsDocToFunctionLikeDeclaration(fnDecl: ts.FunctionLikeDeclaration) {
+        if (!fnDecl.body) {
+          // Two cases: abstract methods and overloaded methods/functions.
+          // Abstract methods are handled in emitTypeAnnotationsHandler.
+          // Overloads are union-ized into the shared type in emitFunctionType.
+          return;
+        }
+        const extraTags = [];
+        if (hasExportingDecorator(fnDecl, typeChecker)) extraTags.push({tagName: 'export'});
+
+        const [tags, ] = getFunctionTypeJSDoc(jsdContext, [fnDecl], extraTags);
+        const mjsdoc = jsdContext.getMutableJSDoc(fnDecl);
+        mjsdoc.tags = tags;
+        mjsdoc.updateComment();
+        jsdContext.blacklistTypeParameters(fnDecl, fnDecl.typeParameters);
+      }
+
       function visitor(node: ts.Node): ts.Node|ts.Node[] {
         switch (node.kind) {
           case ts.SyntaxKind.ClassDeclaration:
@@ -889,22 +906,7 @@ export function jsdocTransformer(
           case ts.SyntaxKind.MethodDeclaration:
           case ts.SyntaxKind.GetAccessor:
           case ts.SyntaxKind.SetAccessor:
-            const fnDecl = node as ts.FunctionLikeDeclaration;
-
-            if (!fnDecl.body) {
-              // Two cases: abstract methods and overloaded methods/functions.
-              // Abstract methods are handled in emitTypeAnnotationsHandler.
-              // Overloads are union-ized into the shared type in emitFunctionType.
-              break;
-            }
-            const extraTags = [];
-            if (hasExportingDecorator(fnDecl, typeChecker)) extraTags.push({tagName: 'export'});
-
-            const [tags, ] = getFunctionTypeJSDoc(jsdContext, [fnDecl], extraTags);
-            const mjsdoc = jsdContext.getMutableJSDoc(fnDecl);
-            mjsdoc.tags = tags;
-            mjsdoc.updateComment();
-            jsdContext.blacklistTypeParameters(fnDecl, fnDecl.typeParameters);
+            addJsDocToFunctionLikeDeclaration(node as ts.FunctionLikeDeclaration);
             break;
           default:
             break;
