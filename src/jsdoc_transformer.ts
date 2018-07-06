@@ -165,6 +165,16 @@ class JSDocTransformerContext {
     if (!type) {
       type = typeChecker.getTypeAtLocation(context);
     }
+    const typeTranslator = this.newTypeTranslator(context);
+    let sym = type.symbol;
+    if (sym) {
+      if (sym.flags & ts.SymbolFlags.Alias) {
+        sym = typeChecker.getAliasedSymbol(sym);
+      }
+      if (typeTranslator.isBlackListed(sym)) {
+        return '?';
+      }
+    }
     return this.newTypeTranslator(context).translate(type);
   }
 
@@ -956,8 +966,8 @@ export function jsdocTransformer(
           // Add an @type for plain identifiers, but not for bindings patterns (i.e. object or array
           // destructuring) - those do not have a syntax in Closure.
           if (ts.isIdentifier(decl.name)) {
-            const type = jsdContext.typeToClosure(decl);
-            localTags.push({tagName: 'type', type});
+            const typeStr = jsdContext.typeToClosure(decl);
+            localTags.push({tagName: 'type', type: typeStr});
           }
           const newStmt = ts.createVariableStatement(
               varStmt.modifiers, ts.createVariableDeclarationList([decl], flags));
