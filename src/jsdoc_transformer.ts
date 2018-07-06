@@ -1002,7 +1002,7 @@ export function jsdocTransformer(
         // impact.
         const tags = jsdContext.getJSDoc(typeAlias);
         tags.push({tagName: 'typedef', type: typeStr});
-        const decl = ts.setOriginalNode(
+        const decl = ts.setSourceMapRange(
             ts.createStatement(ts.createPropertyAccess(
                 ts.createIdentifier('exports'), ts.createIdentifier(typeName))),
             typeAlias);
