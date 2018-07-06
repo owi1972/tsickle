@@ -98,7 +98,7 @@ export function transformFileoverviewComment(context: ts.TransformationContext):
         const synthesizedComments = jsdoc.synthesizeLeadingComments(firstStatement);
         const notEmitted = ts.createNotEmittedStatement(sf);
         // Modify the comments on the firstStatement in place by removing the file-level comments.
-        fileComments = synthesizedComments.splice(0, i);
+        fileComments = synthesizedComments.splice(0, i + 1);
         // Move the fileComments onto notEmitted.
         ts.setSyntheticLeadingComments(notEmitted, fileComments);
         // TODO(martinprobst): consider checking here whether any of the trailing comments contains
