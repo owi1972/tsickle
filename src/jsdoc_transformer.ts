@@ -228,7 +228,7 @@ class JSDocTransformerContext {
             forwardDeclarePrefix, undefined,
             ts.createCall(
                 ts.createPropertyAccess(ts.createIdentifier('goog'), 'forwardDeclare'), undefined,
-                [createSingleQuoteStringLiteral(moduleNamespace)]))]));
+                [ts.createLiteral(moduleNamespace)]))]));
     // Scripts do not have a symbol. Scripts can still be imported, either as side effect imports or
     // with an empty import set ("{}"). TypeScript does not emit a runtime load for an import with
     // an empty list of symbols, but the import forces any global declarations from the library to
@@ -297,15 +297,16 @@ class JSDocTransformerContext {
     if (!decl) return;
 
     // Actually import the symbol.
-    const sf = decl.getSourceFile();
-    const moduleSymbol = this.typeChecker.getSymbolAtLocation(sf);
+    const sourceFile = decl.getSourceFile();
+    if (sourceFile === ts.getOriginalNode(this.sourceFile)) return;
+    const moduleSymbol = this.typeChecker.getSymbolAtLocation(sourceFile);
     if (!moduleSymbol) {
       return;  // A source file might not have a symbol if it's not a module (no ES6 im/exports).
     }
     // Already imported?
     if (this.forwardDeclaredModules.has(moduleSymbol)) return;
     // TODO(martinprobst): this should possibly use fileNameToModuleId.
-    this.forwardDeclare(sf.fileName, moduleSymbol);
+    this.forwardDeclare(sourceFile.fileName, moduleSymbol);
   }
 
   insertForwardDeclares(sourceFile: ts.SourceFile) {
