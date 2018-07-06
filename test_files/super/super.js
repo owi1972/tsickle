@@ -44,21 +44,27 @@ if (false) {
     /** @type {string} */
     SuperTestDerivedInitializedProps.prototype.y;
 }
+// A ctor with a super() but none of the above two details.
 class SuperTestDerivedOrdinary extends SuperTestBaseOneArg {
     constructor() {
         super(3);
     }
 }
+// A class without a ctor, extending a one-arg ctor parent.
 class SuperTestDerivedNoCTorNoArg extends SuperTestBaseNoArg {
 }
+// A class without a ctor, extending a no-arg ctor parent.
 class SuperTestDerivedNoCTorOneArg extends SuperTestBaseOneArg {
 }
 /**
  * @record
  */
 function SuperTestInterface() { }
-/** @type {number} */
-SuperTestInterface.prototype.foo;
+if (false) {
+    /** @type {number} */
+    SuperTestInterface.prototype.foo;
+}
+// A class implementing an interface.
 /**
  * @implements {SuperTestInterface}
  */
