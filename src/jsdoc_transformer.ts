@@ -278,7 +278,7 @@ class JSDocTransformerContext {
           [createSingleQuoteStringLiteral(moduleNamespace)]));
       const comment: ts.SynthesizedComment = {
         kind: ts.SyntaxKind.SingleLineCommentTrivia,
-        text: '// force type-only module to be loaded',
+        text: 'force type-only module to be loaded',
         hasTrailingNewLine: true,
         pos: -1,
         end: -1,
