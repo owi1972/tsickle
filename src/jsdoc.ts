@@ -349,7 +349,7 @@ function serialize(
   if (tags.length === 0) return '';
   if (tags.length === 1) {
     const tag = tags[0];
-    if ((tag.tagName === 'type' || tag.tagName === 'nocollapse') &&
+    if ((tag.tagName === 'type' || tag.tagName === 'typedef' || tag.tagName === 'nocollapse') &&
         (!tag.text || !tag.text.match('\n'))) {
       // Special-case one-liner "type" and "nocollapse" tags to fit on one line, e.g.
       //   /** @type {foo} */

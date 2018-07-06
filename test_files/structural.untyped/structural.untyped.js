@@ -4,6 +4,8 @@
  */
 goog.module('test_files.structural.untyped.structural.untyped');
 var module = module || { id: 'test_files/structural.untyped/structural.untyped.ts' };
+// Ensure that a class is structurally equivalent to an object literal
+// with the same fields.
 class StructuralTest {
     /**
      * @return {?}
@@ -14,6 +16,8 @@ if (false) {
     /** @type {?} */
     StructuralTest.prototype.field1;
 }
+// The function expects a StructuralTest, but we pass it an object
+// literal.
 /**
  * @param {?} st
  * @return {?}

@@ -176,6 +176,17 @@ class JSDocTransformerContext {
     return translator;
   }
 
+  /**
+   * Get the ts.Symbol at a location or throw.
+   * The TypeScript API can return undefined when fetching a symbol, but in many contexts we know it
+   * won't (e.g. our input is already type-checked).
+   */
+  mustGetSymbolAtLocation(node: ts.Node): ts.Symbol {
+    const sym = this.typeChecker.getSymbolAtLocation(node);
+    if (!sym) throw new Error('no symbol');
+    return sym;
+  }
+
   /** Finds an exported (i.e. not global) declaration for the given symbol. */
   protected findExportedDeclaration(sym: ts.Symbol): ts.Declaration|undefined {
     // TODO(martinprobst): it's unclear when a symbol wouldn't have a declaration, maybe just for
@@ -384,8 +395,6 @@ function maybeAddTemplateClause(docTags: jsdoc.Tag[], decl: HasTypeParameters) {
     text: decl.typeParameters.map(tp => getIdentifierText(tp.name)).join(', ')
   });
 }
-
-
 
 function maybeAddHeritageClauses(
     docTags: jsdoc.Tag[], context: JSDocTransformerContext,
@@ -828,8 +837,8 @@ function createClosurePropertyDeclaration(
  * CommonJS module emit to Closure Compiler compatible goog.module and goog.require statements.
  */
 export function jsdocTransformer(
-    host: AnnotatorHost, typeChecker: ts.TypeChecker, diagnostics: ts.Diagnostic[]):
-    (context: ts.TransformationContext) => ts.Transformer<ts.SourceFile> {
+    host: AnnotatorHost, typeChecker: ts.TypeChecker, diagnostics: ts.Diagnostic[],
+    isCommonJS: boolean): (context: ts.TransformationContext) => ts.Transformer<ts.SourceFile> {
   return (context: ts.TransformationContext): ts.Transformer<ts.SourceFile> => {
     return (sourceFile: ts.SourceFile) => {
       const jsdContext = new JSDocTransformerContext(host, diagnostics, typeChecker, sourceFile);
@@ -957,6 +966,49 @@ export function jsdocTransformer(
         return stmts;
       }
 
+      function visitTypeAliasDeclaration(typeAlias: ts.TypeAliasDeclaration): ts.Statement[] {
+        // If the type is also defined as a value, skip emitting it. Closure collapses type & value
+        // namespaces, the two emits would conflict if tsickle emitted both.
+        const sym = jsdContext.mustGetSymbolAtLocation(typeAlias.name);
+        if (sym.flags & ts.SymbolFlags.Value) return [];
+        // Type aliases are always emitted as the resolved underlying type, so there is no need to
+        // emit anything, except for exported types.
+        if (!hasModifierFlag(typeAlias, ts.ModifierFlags.Export)) return [];
+        // A pure ES6 export (`export {Foo}`) is insufficient, as TS does not emit those for pure
+        // types, so tsickle has to pick a module format. We're using CommonJS to emit googmodule,
+        // and code not using googmodule doesn't care about the Closure annotations anyway, so just
+        // skip emitting if the module target isn't commonjs.
+        if (!isCommonJS) return [];
+
+        const typeName = typeAlias.name.getText();
+
+        // Blacklist any type parameters, Closure does not support type aliases with type
+        // parameters.
+        jsdContext.newTypeTranslator(typeAlias).blacklistTypeParameters(
+            jsdContext.symbolsToAliasedNames, typeAlias.typeParameters);
+        const typeStr = host.untyped ? '?' : jsdContext.typeToClosure(typeAlias, undefined);
+        // In the case of an export, we cannot emit a `export var foo;` because TypeScript drops
+        // exports that are never assigned values, and Closure requires us to not assign values to
+        // typedef exports. Introducing a new local variable and exporting it can cause bugs due to
+        // name shadowing and confusing TypeScript's logic on what symbols and types vs values are
+        // exported. Mangling the name to avoid the conflicts would be reasonably clean, but would
+        // require a two pass emit to first find all type alias names, mangle them, and emit the use
+        // sites only later. With that, the fix here is to never emit type aliases, but always
+        // resolve the alias and emit the underlying type (fixing references in the local module,
+        // and also across modules). For downstream JavaScript code that imports the typedef, we
+        // emit an "export.Foo;" that declares and exports the type, and for TypeScript has no
+        // impact.
+        const tags = jsdContext.getJSDoc(typeAlias);
+        tags.push({tagName: 'typedef', type: typeStr});
+        const decl = ts.setOriginalNode(
+            ts.createStatement(ts.createPropertyAccess(
+                ts.createIdentifier('exports'), ts.createIdentifier(typeName))),
+            typeAlias);
+        addCommentOn(decl, tags, jsdoc.TAGS_CONFLICTING_WITH_TYPE);
+        return [decl];
+      }
+
+
       function visitor(node: ts.Node): ts.Node|ts.Node[] {
         switch (node.kind) {
           case ts.SyntaxKind.ClassDeclaration:
@@ -983,6 +1035,8 @@ export function jsdocTransformer(
               jsdoc.suppressLeadingCommentsRecursively(paramDecl);
             }
             break;
+          case ts.SyntaxKind.TypeAliasDeclaration:
+            return visitTypeAliasDeclaration(node as ts.TypeAliasDeclaration);
           default:
             break;
         }
