@@ -100,7 +100,7 @@ class JSDocTransformerContext {
    */
   private forwardDeclaredModules = new Set<ts.Symbol>();
   private forwardDeclares: ts.Statement[] = [];
-  private forwardDeclareCounter = 1;
+  private forwardDeclareCounter = 0;
 
   constructor(
       private host: AnnotatorHost, private diagnostics: ts.Diagnostic[],
@@ -306,6 +306,15 @@ class JSDocTransformerContext {
     if (this.forwardDeclaredModules.has(moduleSymbol)) return;
     // TODO(martinprobst): this should possibly use fileNameToModuleId.
     this.forwardDeclare(sf.fileName, moduleSymbol);
+  }
+
+  insertForwardDeclares(sourceFile: ts.SourceFile) {
+    const insertion =
+        sourceFile.statements.findIndex(s => s.kind !== ts.SyntaxKind.NotEmittedStatement) + 1;
+    return ts.updateSourceFileNode(sourceFile, [
+      ...sourceFile.statements.slice(0, insertion), ...this.forwardDeclares,
+      ...sourceFile.statements.slice(insertion + 1)
+    ]);
   }
 
   getJSDoc(node: ts.Node): jsdoc.Tag[] {
@@ -624,19 +633,18 @@ function createMemberTypeDeclaration(
   // Gather parameter properties from the constructor, if it exists.
   const ctors: ts.ConstructorDeclaration[] = [];
   let paramProps: ts.ParameterDeclaration[] = [];
-  const nonStaticProps: ts.PropertyDeclaration[] = [];
-  const staticProps: ts.PropertyDeclaration[] = [];
+  const nonStaticProps: Array<ts.PropertyDeclaration|ts.PropertySignature> = [];
+  const staticProps: Array<ts.PropertyDeclaration|ts.PropertySignature> = [];
   const abstractMethods: ts.FunctionLikeDeclaration[] = [];
   for (const member of typeDecl.members) {
     if (member.kind === ts.SyntaxKind.Constructor) {
       ctors.push(member as ts.ConstructorDeclaration);
-    } else if (member.kind === ts.SyntaxKind.PropertyDeclaration) {
-      const prop = member as ts.PropertyDeclaration;
-      const isStatic = hasModifierFlag(prop, ts.ModifierFlags.Static);
+    } else if (ts.isPropertyDeclaration(member) || ts.isPropertySignature(member)) {
+      const isStatic = hasModifierFlag(member, ts.ModifierFlags.Static);
       if (isStatic) {
-        staticProps.push(prop);
+        staticProps.push(member);
       } else {
-        nonStaticProps.push(prop);
+        nonStaticProps.push(member);
       }
     } else if (
         (hasModifierFlag(member, ts.ModifierFlags.Abstract) ||
@@ -773,7 +781,7 @@ function escapeForComment(str: string): string {
 
 function createClosurePropertyDeclaration(
     context: JSDocTransformerContext, expr: ts.Expression,
-    prop: ts.PropertyDeclaration|ts.ParameterDeclaration): ts.Statement|null {
+    prop: ts.PropertyDeclaration|ts.PropertySignature|ts.ParameterDeclaration): ts.Statement|null {
   const name = propertyName(prop);
   if (!name) {
     context.debugWarn(prop, `handle strange member:\n${escapeForComment(prop.getText())}`);
@@ -883,6 +891,7 @@ export function jsdocTransformer(
         return memberDecl ? [decl, memberDecl] : [decl];
       }
 
+      /** Function declarations are emitted as they are, with only JSDoc added. */
       function addJsDocToFunctionLikeDeclaration(fnDecl: ts.FunctionLikeDeclaration) {
         if (!fnDecl.body) {
           // Two cases: abstract methods and overloaded methods/functions.
@@ -900,6 +909,48 @@ export function jsdocTransformer(
         jsdContext.blacklistTypeParameters(fnDecl, fnDecl.typeParameters);
       }
 
+      /**
+       * visitVariableStatement flattens variable declaration lists (`var a, b;` to `var a; var
+       * b;`), and attaches JSDoc comments to each variable. JSDoc comments preceding the
+       * original variable are attached to the first newly created one.
+       */
+      function visitVariableStatement(varStmt: ts.VariableStatement): ts.Statement[] {
+        const stmts: ts.Statement[] = [];
+
+        // "const", "let", etc are stored in node flags on the declarationList.
+        const flags = ts.getCombinedNodeFlags(varStmt.declarationList);
+
+        let tags: jsdoc.Tag[]|null = jsdContext.getJSDoc(varStmt);
+        const leading = ts.getSyntheticLeadingComments(varStmt);
+        if (leading) {
+          // Attach non-JSDoc comments to a not emitted statement.
+          const commentHolder = ts.createNotEmittedStatement(varStmt);
+          ts.setSyntheticLeadingComments(commentHolder, leading.filter(c => c.text[0] !== '*'));
+          stmts.push(commentHolder);
+        }
+
+        for (const decl of varStmt.declarationList.declarations) {
+          const localTags: jsdoc.Tag[] = [];
+          if (tags) {
+            // Add any tags and docs preceding the entire statement to the first variable.
+            localTags.push(...tags);
+            tags = null;
+          }
+          // Add an @type for plain identifiers, but not for bindings patterns (i.e. object or array
+          // destructuring) - those do not have a syntax in Closure.
+          if (ts.isIdentifier(decl.name)) {
+            const type = jsdContext.typeToClosure(decl);
+            localTags.push({tagName: 'type', type});
+          }
+          const newStmt = ts.createVariableStatement(
+              varStmt.modifiers, ts.createVariableDeclarationList([decl], flags));
+          if (localTags.length) addCommentOn(newStmt, localTags);
+          stmts.push(newStmt);
+        }
+
+        return stmts;
+      }
+
       function visitor(node: ts.Node): ts.Node|ts.Node[] {
         switch (node.kind) {
           case ts.SyntaxKind.ClassDeclaration:
@@ -913,6 +964,8 @@ export function jsdocTransformer(
           case ts.SyntaxKind.SetAccessor:
             addJsDocToFunctionLikeDeclaration(node as ts.FunctionLikeDeclaration);
             break;
+          case ts.SyntaxKind.VariableStatement:
+            return visitVariableStatement(node as ts.VariableStatement);
           case ts.SyntaxKind.Parameter:
             // Parameter properties (e.g. `constructor(/** docs */ private foo: string)`) might have
             // JSDoc comments, including JSDoc tags recognized by Closure Compiler. Prevent emitting
@@ -930,7 +983,9 @@ export function jsdocTransformer(
         return ts.visitEachChild(node, visitor, context);
       }
 
-      return ts.visitEachChild(sourceFile, visitor, context);
+      sourceFile = ts.visitEachChild(sourceFile, visitor, context);
+
+      return jsdContext.insertForwardDeclares(sourceFile);
     };
   };
 }
