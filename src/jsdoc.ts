@@ -126,20 +126,6 @@ export interface ParsedJSDocComment {
   warnings?: string[];
 }
 
-/** Adds the given JSDoc tags to the given node, as a synthetic comment. */
-export function addJSDocComment(node: ts.Node, docTags: Tag[], escapeExtraTags?: Set<string>) {
-  const text = toStringWithoutStartEnd(docTags, escapeExtraTags);
-  const comment: ts.SynthesizedComment = {
-    kind: ts.SyntaxKind.MultiLineCommentTrivia,
-    text,
-    hasTrailingNewLine: true,
-    pos: -1,
-    end: -1,
-  };
-  ts.setSyntheticLeadingComments(node, [comment]);
-}
-
-
 /**
  * parse parses JSDoc out of a comment string.
  * Returns null if comment is not JSDoc.
@@ -281,6 +267,39 @@ const SINGLETON_TAGS = new Set(['deprecated']);
 /** Tags that conflict with \@type in Closure Compiler (e.g. \@param). */
 export const TAGS_CONFLICTING_WITH_TYPE = new Set(['param', 'return']);
 
+export function syntheticLeadingComments(node: ts.Node) {
+  const existing = ts.getSyntheticLeadingComments(node);
+  if (existing) return existing;
+  const text = node.getFullText();
+  const comments = ts.getLeadingCommentRanges(text, 0) || [];
+  const synthComments = comments.map((cr): ts.SynthesizedComment => {
+    const commentText = cr.kind === ts.SyntaxKind.SingleLineCommentTrivia ?
+        text.substring(cr.pos + 2, cr.end) :
+        text.substring(cr.pos + 2, cr.end - 2);
+    return {...cr, text: commentText, pos: -1, end: -1};
+  });
+  ts.setSyntheticLeadingComments(node, synthComments);
+  suppressCommentsRecursively(node);
+  return synthComments;
+}
+
+export function suppressCommentsRecursively(node: ts.Node): boolean {
+  ts.setEmitFlags(node, ts.EmitFlags.NoLeadingComments);
+  return !!ts.forEachChild(node, (child) => {
+    if (child.pos > node.pos) return true;
+    return suppressCommentsRecursively(child);
+  });
+}
+
+export function toSynthesizedComment(tags: Tag[]): ts.SynthesizedComment {
+  return {
+    kind: ts.SyntaxKind.MultiLineCommentTrivia,
+    text: toStringWithoutStartEnd(tags),
+    pos: -1,
+    end: -1,
+  };
+}
+
 /** Serializes a Comment out to a string, but does not include the start and end comment tokens. */
 export function toStringWithoutStartEnd(tags: Tag[], escapeExtraTags = new Set<string>()): string {
   return serialize(tags, false, escapeExtraTags);
@@ -301,7 +320,7 @@ function serialize(
       // Special-case one-liner "type" and "nocollapse" tags to fit on one line, e.g.
       //   /** @type {foo} */
       const text = tagToString(tag, escapeExtraTags);
-      return  includeStartEnd ? `/** ${text} */` : `*${text} `;
+      return includeStartEnd ? `/** ${text} */` : `*${text} `;
     }
     // Otherwise, fall through to the multi-line output.
   }

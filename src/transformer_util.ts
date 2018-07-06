@@ -581,10 +581,8 @@ export function createNotEmittedStatementWithComments(
 
 /**
  * Converts `ts.CommentRange`s into `ts.SynthesizedComment`s
- * @param sourceFile
- * @param parsedComments
  */
-function synthesizeCommentRanges(
+export function synthesizeCommentRanges(
     sourceFile: ts.SourceFile, parsedComments: ts.CommentRange[]): ts.SynthesizedComment[] {
   const synthesizedComments: ts.SynthesizedComment[] = [];
   parsedComments.forEach(({kind, pos, end, hasTrailingNewLine}, commentIdx) => {
@@ -623,7 +621,7 @@ export function createNotEmittedStatement(sourceFile: ts.SourceFile): ts.NotEmit
  * @param start Where to start scanning
  * @param end Where to end scanning
  */
-function getAllLeadingCommentRanges(
+export function getAllLeadingCommentRanges(
     sourceFile: ts.SourceFile, start: number, end: number): ts.CommentRange[] {
   // exeute ts.getLeadingCommentRanges with pos = 0 so that it does not skip
   // comments until the first newline.

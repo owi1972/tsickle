@@ -6,10 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import * as path from 'path';
-import {toASCII} from 'punycode';
 
-import {createBlock, JSDoc} from '../node_modules/typescript';
 
 import {hasExportingDecorator} from './decorators';
 import * as googmodule from './googmodule';
@@ -45,6 +42,27 @@ export interface AnnotatorHost {
    * If true, do not modify quotes around property accessors.
    */
   disableAutoQuoting?: boolean;
+}
+
+
+class MutableJSDoc {
+  constructor(
+      private node: ts.Node, private sourceComment: ts.SynthesizedComment|null,
+      public tags: jsdoc.Tag[]) {}
+
+  updateComment(escapeExtraTags?: Set<string>) {
+    const text = jsdoc.toStringWithoutStartEnd(this.tags, escapeExtraTags);
+    if (this.sourceComment) {
+      this.sourceComment.text = text;
+      return;
+    }
+
+    const comment: ts.SynthesizedComment =
+        {kind: ts.SyntaxKind.MultiLineCommentTrivia, text: '', pos: -1, end: -1};
+    const comments = ts.getSyntheticLeadingComments(this.node) || [];
+    comments.push(comment);
+    ts.setSyntheticLeadingComments(this.node, comments);
+  }
 }
 
 class JSDocTransformerContext {
@@ -230,13 +248,14 @@ class JSDocTransformerContext {
       const hardRequire = ts.createStatement(ts.createCall(
           ts.createPropertyAccess(ts.createIdentifier('goog'), 'require'), undefined,
           [createSingleQuoteStringLiteral(moduleNamespace)]));
-      ts.setSyntheticTrailingComments(hardRequire, [{
-                                        kind: ts.SyntaxKind.SingleLineCommentTrivia,
-                                        text: '// force type-only module to be loaded',
-                                        hasTrailingNewLine: true,
-                                        pos: -1,
-                                        end: -1,
-                                      }]);
+      const comment: ts.SynthesizedComment = {
+        kind: ts.SyntaxKind.SingleLineCommentTrivia,
+        text: '// force type-only module to be loaded',
+        hasTrailingNewLine: true,
+        pos: -1,
+        end: -1,
+      };
+      ts.setSyntheticTrailingComments(hardRequire, [comment]);
       this.forwardDeclares.push(hardRequire);
     }
     for (const sym of exports) {
@@ -253,51 +272,6 @@ class JSDocTransformerContext {
       const qualifiedName = nsImport && isDefaultImport ? forwardDeclarePrefix :
                                                           forwardDeclarePrefix + '.' + sym.name;
       this.symbolsToAliasedNames.set(sym, qualifiedName);
-    }
-
-    function getJSDoc(
-        sourceFile: ts.SourceFile, diagnostics: ts.Diagnostic[], node: ts.Node): jsdoc.Tag[]|null {
-      const text = node.getFullText();
-      const comments = ts.getLeadingCommentRanges(text, 0);
-      if (!comments || comments.length === 0) return null;
-
-      // We need to search backwards for the first JSDoc comment to avoid ignoring such when another
-      // code-level comment is between that comment and the function declaration (see
-      // testfiles/doc_params for an example).
-      let docRelativePos = 0;
-      let parsed: jsdoc.ParsedJSDocComment|null = null;
-      for (let i = comments.length - 1; i >= 0; i--) {
-        const {pos, end} = comments[i];
-        // end is relative within node.getFullText(), add getFullStart to obtain coordinates that
-        // are comparable to node positions.
-        const docRelativeEnd = end + node.getFullStart();
-        if (docRelativeEnd <= sourceFile.getStart() &&
-            sourceFile.text.substring(docRelativeEnd).startsWith('\n\n')) {
-          // This comment is at the very beginning of the file and there's an empty line between the
-          // comment and this node, it's a "detached comment". That means we should treat it as a
-          // file-level comment, not attached to this code node.
-          return null;
-        }
-        const comment = text.substring(pos, end);
-        parsed = jsdoc.parse(comment);
-        if (parsed) {
-          docRelativePos = node.getFullStart() + pos;
-          break;
-        }
-      }
-      if (!parsed) return null;
-      if (parsed.warnings) {
-        const start = docRelativePos;
-        diagnostics.push({
-          file: sourceFile,
-          start,
-          length: node.getStart() - start,
-          messageText: parsed.warnings.join('\n'),
-          category: ts.DiagnosticCategory.Warning,
-          code: 0,
-        });
-      }
-      return parsed.tags;
     }
   }
 
@@ -317,48 +291,31 @@ class JSDocTransformerContext {
     this.forwardDeclare(sf.fileName, moduleSymbol);
   }
 
-  getJSDoc(node: ts.Node): jsdoc.Tag[]|null {
+  getMutableJSDoc(node: ts.Node): MutableJSDoc {
+    function newSyntheticComment() {
+      return new MutableJSDoc(node, null, []);
+    }
     const text = node.getFullText();
-    const comments = ts.getLeadingCommentRanges(text, 0);
-    if (!comments || comments.length === 0) return null;
+    const comments = jsdoc.syntheticLeadingComments(node);
+    if (!comments || comments.length === 0) return newSyntheticComment();
 
-    // We need to search backwards for the first JSDoc comment to avoid ignoring such when another
-    // code-level comment is between that comment and the function declaration (see
-    // testfiles/doc_params for an example).
-    let docRelativePos = 0;
-    let parsed: jsdoc.ParsedJSDocComment|null = null;
     for (let i = comments.length - 1; i >= 0; i--) {
-      const {pos, end} = comments[i];
-      // end is relative within node.getFullText(), add getFullStart to obtain coordinates that are
-      // comparable to node positions.
-      const docRelativeEnd = end + node.getFullStart();
-      if (docRelativeEnd <= this.sourceFile.getStart() &&
-          this.sourceFile.text.substring(docRelativeEnd).startsWith('\n\n')) {
-        // This comment is at the very beginning of the file and there's an empty line between the
-        // comment and this node, it's a "detached comment". That means we should treat it as a
-        // file-level comment, not attached to this code node.
-        return null;
-      }
-      const comment = text.substring(pos, end);
-      parsed = jsdoc.parse(comment);
+      const parsed = jsdoc.parse(comments[i].text);
       if (parsed) {
-        docRelativePos = node.getFullStart() + pos;
-        break;
+        if (parsed.warnings) {
+          this.diagnostics.push({
+            file: this.sourceFile,
+            start: node.getFullStart(),
+            length: node.getStart() - node.getStart(),
+            messageText: parsed.warnings.join('\n'),
+            category: ts.DiagnosticCategory.Warning,
+            code: 0,
+          });
+        }
+        return new MutableJSDoc(node, comments[i], parsed.tags);
       }
     }
-    if (!parsed) return null;
-    if (parsed.warnings) {
-      const start = docRelativePos;
-      this.diagnostics.push({
-        file: this.sourceFile,
-        start,
-        length: node.getStart() - start,
-        messageText: parsed.warnings.join('\n'),
-        category: ts.DiagnosticCategory.Warning,
-        code: 0,
-      });
-    }
-    return parsed.tags;
+    return newSyntheticComment();
   }
 }
 
@@ -497,17 +454,19 @@ function getFunctionTypeJSDoc(
   const returnTags: jsdoc.Tag[] = [];
   const typeParameterNames = new Set<string>();
 
+  let firstDoc: MutableJSDoc|null = null;
   for (const fnDecl of fnDecls) {
     // Construct the JSDoc comment by reading the existing JSDoc, if
     // any, and merging it with the known types of the function
     // parameters and return type.
-    const docTags = context.getJSDoc(fnDecl) || [];
+    const mjsdoc = context.getMutableJSDoc(fnDecl);
+    if (!firstDoc) firstDoc = mjsdoc;
 
     // Copy all the tags other than @param/@return into the new
     // JSDoc without any change; @param/@return are handled specially.
     // TODO: there may be problems if an annotation doesn't apply to all overloads;
     // is it worth checking for this and erroring?
-    for (const tag of docTags) {
+    for (const tag of mjsdoc.tags) {
       if (tag.tagName === 'param' || tag.tagName === 'return') continue;
       newDoc.push(tag);
     }
@@ -556,7 +515,7 @@ function getFunctionTypeJSDoc(
       }
       newTag.type = context.typeToClosure(fnDecl, type);
 
-      for (const {tagName, parameterName, text} of docTags) {
+      for (const {tagName, parameterName, text} of mjsdoc.tags) {
         if (tagName === 'param' && parameterName === newTag.parameterName) {
           newTag.text = text;
           break;
@@ -571,7 +530,7 @@ function getFunctionTypeJSDoc(
       const retType = typeChecker.getReturnTypeOfSignature(sig);
       const retTypeString: string = context.typeToClosure(fnDecl, retType);
       let returnDoc: string|undefined;
-      for (const {tagName, text} of docTags) {
+      for (const {tagName, text} of mjsdoc.tags) {
         if (tagName === 'return') {
           returnDoc = text;
           break;
@@ -675,7 +634,10 @@ function createMemberTypeDeclaration(
     return null;
   }
 
-  if (!typeDecl.name) return null;
+  if (!typeDecl.name) {
+    context.debugWarn(typeDecl, 'cannot add types on unnamed declarations');
+    return null;
+  }
 
   const className = getIdentifierText(typeDecl.name);
   const staticPropAccess = ts.createIdentifier(className);
@@ -709,7 +671,7 @@ function createMemberTypeDeclaration(
             undefined,
             ts.createBlock([]),
             )));
-    jsdoc.addJSDocComment(abstractFnDecl, tags);
+    ts.setSyntheticLeadingComments(abstractFnDecl, [jsdoc.toSynthesizedComment(tags)]);
     propertyDecls.push(ts.setOriginalNode(abstractFnDecl, fnDecl));
   }
 
@@ -806,16 +768,16 @@ function createClosurePropertyDeclaration(
   // so the Closure type must be ?|undefined.
   if (prop.questionToken && type === '?') type += '|undefined';
 
-  const docTags = context.getJSDoc(prop) || [];
-  docTags.push({tagName: 'type', type});
+  const mjsdoc = context.getMutableJSDoc(prop);
+  mjsdoc.tags.push({tagName: 'type', type});
   if (hasExportingDecorator(prop, context.typeChecker)) {
-    docTags.push({tagName: 'export'});
+    mjsdoc.tags.push({tagName: 'export'});
   }
   // Avoid printing annotations that can conflict with @type
   // This avoids Closure's error "type annotation incompatible with other annotations"
   const declStmt =
       ts.setOriginalNode(ts.createStatement(ts.createPropertyAccess(expr, name)), prop);
-  jsdoc.addJSDocComment(declStmt, docTags, jsdoc.TAGS_CONFLICTING_WITH_TYPE);
+  mjsdoc.updateComment(jsdoc.TAGS_CONFLICTING_WITH_TYPE);
   return declStmt;
 }
 
@@ -832,17 +794,17 @@ export function jsdocTransformer(
       const jsdContext = new JSDocTransformerContext(host, diagnostics, typeChecker, sourceFile);
 
       function visitClassDeclaration(classDecl: ts.ClassDeclaration): ts.Statement[] {
-        const docTags = jsdContext.getJSDoc(classDecl) || [];
+        const mjsdoc = jsdContext.getMutableJSDoc(classDecl);
         if (hasModifierFlag(classDecl, ts.ModifierFlags.Abstract)) {
-          docTags.push({tagName: 'abstract'});
+          mjsdoc.tags.push({tagName: 'abstract'});
         }
 
-        maybeAddTemplateClause(docTags, classDecl);
+        maybeAddTemplateClause(mjsdoc.tags, classDecl);
         if (!host.untyped) {
-          maybeAddHeritageClauses(docTags, jsdContext, classDecl);
+          maybeAddHeritageClauses(mjsdoc.tags, jsdContext, classDecl);
         }
-        if (docTags.length > 0) {
-          jsdoc.addJSDocComment(classDecl, docTags);
+        if (mjsdoc.tags.length > 0) {
+          mjsdoc.updateComment();
         }
         const decls: ts.Statement[] = [classDecl];
         const memberDecl = createMemberTypeDeclaration(jsdContext, classDecl);
@@ -863,11 +825,11 @@ export function jsdocTransformer(
               iface, 'interface has both a type and a value, skipping emit')];
         }
 
-        const docTags = jsdContext.getJSDoc(iface) || [];
-        docTags.push({tagName: 'record'});
-        maybeAddTemplateClause(docTags, iface);
+        const mjsdoc = jsdContext.getMutableJSDoc(iface) || [];
+        mjsdoc.tags.push({tagName: 'record'});
+        maybeAddTemplateClause(mjsdoc.tags, iface);
         if (!host.untyped) {
-          maybeAddHeritageClauses(docTags, jsdContext, iface);
+          maybeAddHeritageClauses(mjsdoc.tags, jsdContext, iface);
         }
         const name = getIdentifierText(iface.name);
         const modifiers = hasModifierFlag(iface, ts.ModifierFlags.Export) ?
@@ -885,7 +847,7 @@ export function jsdocTransformer(
                 /* body */ ts.createBlock([]),
                 ),
             iface);
-        jsdoc.addJSDocComment(decl, docTags);
+        mjsdoc.updateComment();
         const memberDecl = createMemberTypeDeclaration(jsdContext, iface);
         return memberDecl ? [decl, memberDecl] : [decl];
       }

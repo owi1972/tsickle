@@ -15,6 +15,7 @@ import {enumTransformer} from './enum_transformer';
 import {transformFileoverviewComment} from './fileoverview_comment_transformer';
 import * as googmodule from './googmodule';
 import * as jsdoc from './jsdoc';
+import {jsdocTransformer} from './jsdoc_transformer';
 import {ModulesManifest} from './modules_manifest';
 import {getEntityNameText, getIdentifierText, Rewriter, unescapeName} from './rewriter';
 import {containsInlineSourceMap, extractInlineSourceMap, parseSourceMap, removeInlineSourceMap, setInlineSourceMap, SourceMapper} from './source_map_utils';
@@ -23,7 +24,6 @@ import {createCustomTransformers} from './transformer_util';
 import * as typeTranslator from './type-translator';
 import * as ts from './typescript';
 import {hasModifierFlag, isDtsFileName} from './util';
-import { jsdocTransformer } from './jsdoc_transformer';
 
 export {FileMap, ModulesManifest} from './modules_manifest';
 
@@ -1932,11 +1932,10 @@ export function emitWithTsickle(
   const typeChecker = program.getTypeChecker();
   const tsickleSourceTransformers: Array<ts.TransformerFactory<ts.SourceFile>> = [];
   if (host.transformTypesToClosure) {
-    // Note: tsickle.annotate can also lower decorators in the same run.
-    tsickleSourceTransformers.push(jsdocTransformer(host, typeChecker, tsickleDiagnostics));
-    tsickleSourceTransformers.push(enumTransformer(typeChecker, tsickleDiagnostics));
     // Only add @suppress {checkTypes} comments when also adding type annotations.
     tsickleSourceTransformers.push(transformFileoverviewComment);
+    tsickleSourceTransformers.push(jsdocTransformer(host, typeChecker, tsickleDiagnostics));
+    tsickleSourceTransformers.push(enumTransformer(typeChecker, tsickleDiagnostics));
     tsickleSourceTransformers.push(decoratorDownlevelTransformer(typeChecker, tsickleDiagnostics));
   } else if (host.transformDecorators) {
     tsickleSourceTransformers.push(decoratorDownlevelTransformer(typeChecker, tsickleDiagnostics));
