@@ -325,12 +325,13 @@ export function suppressLeadingCommentsRecursively(node: ts.Node) {
   suppressCommentsInternal(node);
 }
 
-export function toSynthesizedComment(tags: Tag[]): ts.SynthesizedComment {
+export function toSynthesizedComment(tags: Tag[], escapeExtraTags?: Set<string>): ts.SynthesizedComment {
   return {
     kind: ts.SyntaxKind.MultiLineCommentTrivia,
-    text: toStringWithoutStartEnd(tags),
+    text: toStringWithoutStartEnd(tags, escapeExtraTags),
     pos: -1,
     end: -1,
+    hasTrailingNewLine: true,
   };
 }
 

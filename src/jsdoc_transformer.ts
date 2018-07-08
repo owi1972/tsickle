@@ -80,14 +80,7 @@ class MutableJSDoc {
 }
 
 function addCommentOn(node: ts.Node, tags: jsdoc.Tag[], escapeExtraTags?: Set<string>) {
-  const text = jsdoc.toStringWithoutStartEnd(tags, escapeExtraTags);
-  const comment: ts.SynthesizedComment = {
-    kind: ts.SyntaxKind.MultiLineCommentTrivia,
-    text,
-    pos: -1,
-    end: -1,
-    hasTrailingNewLine: true,
-  };
+  const comment = jsdoc.toSynthesizedComment(tags, escapeExtraTags);
   const comments = ts.getSyntheticLeadingComments(node) || [];
   comments.push(comment);
   ts.setSyntheticLeadingComments(node, comments);
