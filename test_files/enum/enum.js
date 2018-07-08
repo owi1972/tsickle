@@ -5,6 +5,7 @@
  * @fileoverview added by tsickle
  * @suppress {checkTypes,extraRequire,uselessCode} checked by tsc
  */
+// Line with a missing semicolon should not break the following enum.
 goog.module('test_files.enum.enum');
 var module = module || { id: 'test_files/enum/enum.ts' };
 /** @type {!Array<?>} */
@@ -15,6 +16,8 @@ const EnumTest1 = {
 };
 EnumTest1[EnumTest1.XYZ] = 'XYZ';
 EnumTest1[EnumTest1.PI] = 'PI';
+// Verify that the resulting TypeScript still allows you to index into the enum with all the various
+// ways allowed of enums.
 /** @type {EnumTest1} */
 let enumTestValue = EnumTest1.XYZ;
 /** @type {EnumTest1} */
@@ -33,6 +36,7 @@ enumTestFunction(enumTestValue);
 let enumTestLookup = EnumTest1["XYZ"];
 /** @type {?} */
 let enumTestLookup2 = EnumTest1["xyz".toUpperCase()];
+// Verify that unions of enum members and other values are handled correctly.
 /** @type {(boolean|EnumTest1)} */
 let enumUnionType = EnumTest1.XYZ;
 /** @enum {number} */
@@ -69,10 +73,12 @@ let constEnumValue = 0 /* EMITTED_ENUM_VALUE */;
  */
 function InterfaceUsingConstEnum() { }
 exports.InterfaceUsingConstEnum = InterfaceUsingConstEnum;
-/** @type {ConstEnum} */
-InterfaceUsingConstEnum.prototype.field;
-/** @type {ConstEnum} */
-InterfaceUsingConstEnum.prototype.field2;
+if (false) {
+    /** @type {ConstEnum} */
+    InterfaceUsingConstEnum.prototype.field;
+    /** @type {ConstEnum} */
+    InterfaceUsingConstEnum.prototype.field2;
+}
 /** @enum {number} */
 const EnumWithNonConstValues = {
     Scheme: (x => x + 1)(3),

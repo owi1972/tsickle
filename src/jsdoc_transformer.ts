@@ -955,7 +955,8 @@ export function jsdocTransformer(
           stmts.push(commentHolder);
         }
 
-        for (const decl of varStmt.declarationList.declarations) {
+        const declList = ts.visitNode(varStmt.declarationList, visitor);
+        for (const decl of declList.declarations) {
           const localTags: jsdoc.Tag[] = [];
           if (tags) {
             // Add any tags and docs preceding the entire statement to the first variable.
