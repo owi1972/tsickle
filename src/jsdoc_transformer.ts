@@ -51,9 +51,20 @@ class MutableJSDoc {
   updateComment(escapeExtraTags?: Set<string>) {
     const text = jsdoc.toStringWithoutStartEnd(this.tags, escapeExtraTags);
     if (this.sourceComment) {
+      if (!text) {
+        // Delete the (now empty) comment.
+        const comments = ts.getSyntheticLeadingComments(this.node)!;
+        const idx = comments.indexOf(this.sourceComment);
+        comments.splice(idx, 1);
+        this.sourceComment = null;
+        return;
+      }
       this.sourceComment.text = text;
       return;
     }
+
+    // Don't add an empty comment.
+    if (!text) return;
 
     const comment: ts.SynthesizedComment = {
       kind: ts.SyntaxKind.MultiLineCommentTrivia,
@@ -927,11 +938,9 @@ export function jsdocTransformer(
         if (hasExportingDecorator(fnDecl, typeChecker)) extraTags.push({tagName: 'export'});
 
         const [tags, ] = getFunctionTypeJSDoc(jsdContext, [fnDecl], extraTags);
-        if (tags.length) {
-          const mjsdoc = jsdContext.getMutableJSDoc(fnDecl);
-          mjsdoc.tags = tags;
-          mjsdoc.updateComment();
-        }
+        const mjsdoc = jsdContext.getMutableJSDoc(fnDecl);
+        mjsdoc.tags = tags;
+        mjsdoc.updateComment();
         jsdContext.blacklistTypeParameters(fnDecl, fnDecl.typeParameters);
       }
 
