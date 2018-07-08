@@ -736,7 +736,7 @@ function createMemberTypeDeclaration(
             ts.createBlock([]),
             )));
     ts.setSyntheticLeadingComments(abstractFnDecl, [jsdoc.toSynthesizedComment(tags)]);
-    propertyDecls.push(ts.setOriginalNode(abstractFnDecl, fnDecl));
+    propertyDecls.push(ts.setSourceMapRange(abstractFnDecl, fnDecl));
   }
 
   // See test_files/fields/fields.ts:BaseThatThrows for a note on this wrapper.
