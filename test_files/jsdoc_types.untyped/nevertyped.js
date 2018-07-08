@@ -11,5 +11,7 @@ var module = module || { id: 'test_files/jsdoc_types.untyped/nevertyped.ts' };
  */
 function NeverTyped() { }
 exports.NeverTyped = NeverTyped;
-/** @type {?} */
-NeverTyped.prototype.foo;
+if (false) {
+    /** @type {?} */
+    NeverTyped.prototype.foo;
+}

@@ -229,7 +229,7 @@ class JSDocTransformerContext {
    * Returns the `const x = goog.forwardDeclare...` text for an import of the given `importPath`.
    * This also registers aliases for symbols from the module that map to this forward declare.
    */
-  private forwardDeclare(
+  forwardDeclare(
       importPath: string, moduleSymbol: ts.Symbol|undefined, isDefaultImport = false) {
     if (this.host.untyped) return;
     const nsImport = googmodule.extractGoogNamespaceImport(importPath);
@@ -877,7 +877,6 @@ export function jsdocTransformer(
       }
 
       function visitInterfaceDeclaration(iface: ts.InterfaceDeclaration): ts.Statement[] {
-        if (host.untyped) return [];
         const sym = typeChecker.getSymbolAtLocation(iface.name);
         if (!sym) {
           jsdContext.error(iface, 'interface with no symbol');
@@ -1029,6 +1028,23 @@ export function jsdocTransformer(
         return ts.createParen(inner);
       }
 
+      function visitImportDeclaration(importDecl: ts.ImportDeclaration) {
+        // No need to forward declare side effect imports.
+        if (!importDecl.importClause) return importDecl;
+        // Introduce a goog.forwardDeclare for the module, so that if TypeScript does not emit the
+        // module because it's only used in type positions, the JSDoc comments still reference a
+        // valid Closure level symbol.
+        const sym = typeChecker.getSymbolAtLocation(importDecl.moduleSpecifier);
+        // modules might not have a symbol if they are unused.
+        if (!sym) return importDecl;
+        // Write the export declaration here so that forward declares come after it, and
+        // fileoverview comments do not get moved behind statements.
+        const importPath = (importDecl.moduleSpecifier as ts.StringLiteral).text;
+        jsdContext.forwardDeclare(
+            importPath, sym, /* default import? */ !!importDecl.importClause.name);
+        return importDecl;
+      }
+
       function visitor(node: ts.Node): ts.Node|ts.Node[] {
         switch (node.kind) {
           case ts.SyntaxKind.ClassDeclaration:
@@ -1060,6 +1076,8 @@ export function jsdocTransformer(
           case ts.SyntaxKind.TypeAssertionExpression:
           case ts.SyntaxKind.AsExpression:
             return visitAssertionExpression(node as ts.AssertionExpression);
+          case ts.SyntaxKind.ImportDeclaration:
+            return visitImportDeclaration(node as ts.ImportDeclaration);
           default:
             break;
         }

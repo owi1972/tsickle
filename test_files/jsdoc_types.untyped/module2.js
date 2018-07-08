@@ -15,13 +15,18 @@ exports.ClassTwo = ClassTwo;
  */
 function Interface() { }
 exports.Interface = Interface;
-/** @type {?} */
-Interface.prototype.x;
+if (false) {
+    /** @type {?} */
+    Interface.prototype.x;
+}
 /**
  * @template T
  */
 class ClassWithParams {
 }
 exports.ClassWithParams = ClassWithParams;
+// TODO(evanm):
+// export type TypeAlias = number;
+// export type TypeAliasWithParam<T> = T[];
 /** @type {?} */
 exports.value = 3;

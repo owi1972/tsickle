@@ -1,3 +1,5 @@
+// test_files/jsdoc_types.untyped/module1.ts(4,3): warning TS0: handle strange member:
+// "quoted-bad-name": string;
 /**
  * @fileoverview added by tsickle
  * @suppress {checkTypes,extraRequire,uselessCode} checked by tsc
@@ -12,5 +14,7 @@ exports.Class = Class;
  */
 function Interface() { }
 exports.Interface = Interface;
-/** @type {?} */
-Interface.prototype.x;
+if (false) {
+    /** @type {?} */
+    Interface.prototype.x;
+}
