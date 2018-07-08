@@ -25,8 +25,9 @@ if (false) {
 class ClassWithParams {
 }
 exports.ClassWithParams = ClassWithParams;
-// TODO(evanm):
-// export type TypeAlias = number;
-// export type TypeAliasWithParam<T> = T[];
+/** @typedef {?} */
+exports.TypeAlias;
+/** @typedef {?} */
+exports.TypeAliasWithParam;
 /** @type {?} */
 exports.value = 3;

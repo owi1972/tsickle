@@ -166,16 +166,6 @@ class JSDocTransformerContext {
     if (!type) {
       type = typeChecker.getTypeAtLocation(context);
     }
-    const typeTranslator = this.newTypeTranslator(context);
-    let sym = type.symbol;
-    if (sym) {
-      if (sym.flags & ts.SymbolFlags.Alias) {
-        sym = typeChecker.getAliasedSymbol(sym);
-      }
-      if (typeTranslator.isBlackListed(sym)) {
-        return '?';
-      }
-    }
     return this.newTypeTranslator(context).translate(type);
   }
 
@@ -185,6 +175,16 @@ class JSDocTransformerContext {
         (sym: ts.Symbol) => this.ensureSymbolDeclared(sym));
     translator.warn = msg => this.debugWarn(context, msg);
     return translator;
+  }
+
+  isBlackListed(context: ts.Node) {
+    const type = this.typeChecker.getTypeAtLocation(context);
+    let sym = type.symbol;
+    if (!sym) return false;
+    if (sym.flags & ts.SymbolFlags.Alias) {
+      sym = this.typeChecker.getAliasedSymbol(sym);
+    }
+    return this.newTypeTranslator(context).isBlackListed(sym);
   }
 
   /**
@@ -229,8 +229,7 @@ class JSDocTransformerContext {
    * Returns the `const x = goog.forwardDeclare...` text for an import of the given `importPath`.
    * This also registers aliases for symbols from the module that map to this forward declare.
    */
-  forwardDeclare(
-      importPath: string, moduleSymbol: ts.Symbol|undefined, isDefaultImport = false) {
+  forwardDeclare(importPath: string, moduleSymbol: ts.Symbol|undefined, isDefaultImport = false) {
     if (this.host.untyped) return;
     const nsImport = googmodule.extractGoogNamespaceImport(importPath);
     const forwardDeclarePrefix = `tsickle_forward_declare_${++this.forwardDeclareCounter}`;
@@ -289,7 +288,7 @@ class JSDocTransformerContext {
           [createSingleQuoteStringLiteral(moduleNamespace)]));
       const comment: ts.SynthesizedComment = {
         kind: ts.SyntaxKind.SingleLineCommentTrivia,
-        text: 'force type-only module to be loaded',
+        text: ' force type-only module to be loaded',
         hasTrailingNewLine: true,
         pos: -1,
         end: -1,
@@ -966,8 +965,16 @@ export function jsdocTransformer(
           // Add an @type for plain identifiers, but not for bindings patterns (i.e. object or array
           // destructuring) - those do not have a syntax in Closure.
           if (ts.isIdentifier(decl.name)) {
-            const typeStr = jsdContext.typeToClosure(decl);
-            localTags.push({tagName: 'type', type: typeStr});
+            // For variables that are initialized and use a blacklisted type, do not emit a type at
+            // all. Closure Compiler might be able to infer a better type from the initializer than
+            // the `?` the code below would emit.
+            // TODO(martinprobst): consider doing this for all types that get emitted as ?, not just
+            // for blacklisted ones.
+            const blackListedInitialized = !!decl.initializer && jsdContext.isBlackListed(decl);
+            if (!blackListedInitialized) {
+              const typeStr = jsdContext.typeToClosure(decl);
+              localTags.push({tagName: 'type', type: typeStr});
+            }
           }
           const newStmt = ts.createVariableStatement(
               varStmt.modifiers, ts.createVariableDeclarationList([decl], flags));
@@ -1023,7 +1030,8 @@ export function jsdocTransformer(
       /** Emits a parenthesized Closure cast: `(/** \@type ... * / (expr))`. */
       function visitAssertionExpression(assertion: ts.AssertionExpression) {
         const inner = ts.createParen(assertion.expression);
-        const comment = addCommentOn(inner, [{tagName: 'type', type: jsdContext.typeToClosure(assertion.type)}]);
+        const comment = addCommentOn(
+            inner, [{tagName: 'type', type: jsdContext.typeToClosure(assertion.type)}]);
         comment.hasTrailingNewLine = false;
         return ts.createParen(inner);
       }
