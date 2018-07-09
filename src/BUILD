@@ -19,6 +19,7 @@ ts_library(
         "cli_support.ts",
         "decorators.ts",
         "enum_transformer.ts",
+        "export_star_transformer.ts",
         "fileoverview_comment_transformer.ts",
         "googmodule.ts",
         "jsdoc.ts",
