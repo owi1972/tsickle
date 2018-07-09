@@ -1,5 +1,4 @@
-// test_files/class/class.ts(126,42): warning TS0: type/symbol conflict for Zone, using {?} for now
-// test_files/class/class.ts(130,38): warning TS0: type/symbol conflict for Zone, using {?} for now
+// test_files/class/class.ts(124,1): warning TS0: type/symbol conflict for Zone, using {?} for now
 /**
  * @fileoverview added by tsickle
  * @suppress {checkTypes,extraRequire,uselessCode} checked by tsc
@@ -73,7 +72,7 @@ let interfaceExtendsInterface = {
  */
 function InterfaceExtendsClass() { }
 if (false) {
-/**
+    /**
      * @return {void}
      */
     InterfaceExtendsClass.prototype.interfaceFunc3 = function () { };

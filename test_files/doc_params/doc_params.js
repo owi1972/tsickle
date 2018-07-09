@@ -9,6 +9,7 @@ class Foo {
      * @ngInject
      * @param {string} a
      */
+    // Some comment
     constructor(a) {
         this.a = a;
     }

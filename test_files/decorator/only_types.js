@@ -12,5 +12,7 @@ var module = module || { id: 'test_files/decorator/only_types.ts' };
  */
 function AnotherType() { }
 exports.AnotherType = AnotherType;
-/** @type {string} */
-AnotherType.prototype.field;
+if (false) {
+    /** @type {string} */
+    AnotherType.prototype.field;
+}

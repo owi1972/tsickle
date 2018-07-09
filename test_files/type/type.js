@@ -1,3 +1,4 @@
+// test_files/type/type.ts(3,1): warning TS0: type/symbol conflict for Array, using {?} for now
 // test_files/type/type.ts(14,5): warning TS0: unhandled anonymous type
 /**
  * @fileoverview added by tsickle

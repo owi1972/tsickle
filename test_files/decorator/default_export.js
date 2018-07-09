@@ -4,6 +4,7 @@
  */
 goog.module('test_files.decorator.default_export');
 var module = module || { id: 'test_files/decorator/default_export.ts' };
+// tslint:disable-next-line:no-default-export
 class DefaultExport {
 }
 exports.default = DefaultExport;
