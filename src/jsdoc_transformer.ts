@@ -425,7 +425,7 @@ function maybeAddTemplateClause(docTags: jsdoc.Tag[], decl: HasTypeParameters) {
 }
 
 function maybeAddHeritageClauses(
-    docTags: jsdoc.Tag[], context: ModuleTypeTranslator,
+    docTags: jsdoc.Tag[], mtt: ModuleTypeTranslator,
     decl: ts.ClassLikeDeclaration|ts.InterfaceDeclaration) {
   if (!decl.heritageClauses) return;
   const isClass = decl.kind === ts.SyntaxKind.ClassDeclaration;
@@ -445,7 +445,7 @@ function maybeAddHeritageClauses(
     for (const impl of heritage.types) {
       let tagName = decl.kind === ts.SyntaxKind.InterfaceDeclaration ? 'extends' : 'implements';
 
-      const sym = context.typeChecker.getSymbolAtLocation(impl.expression);
+      const sym = mtt.typeChecker.getSymbolAtLocation(impl.expression);
       if (!sym) {
         // It's possible for a class declaration to extend an expression that
         // does not have have a symbol, for example when a mixin function is
@@ -457,7 +457,7 @@ function maybeAddHeritageClauses(
         // https://github.com/google/closure-compiler/issues/2182). We would
         // probably need to generate an intermediate class declaration and
         // extend that. For now, just omit the `extends` annotation.
-        context.debugWarn(decl, `could not resolve supertype: ${impl.getText()}`);
+        mtt.debugWarn(decl, `could not resolve supertype: ${impl.getText()}`);
         docTags.push({
           tagName: '',
           text: 'NOTE: tsickle could not resolve supertype, ' +
@@ -469,7 +469,7 @@ function maybeAddHeritageClauses(
       if (sym.flags & ts.SymbolFlags.TypeAlias) {
         // It's implementing a type alias.  Follow the type alias back
         // to the original symbol to check whether it's a type or a value.
-        const type = context.typeChecker.getDeclaredTypeOfSymbol(sym);
+        const type = mtt.typeChecker.getDeclaredTypeOfSymbol(sym);
         if (!type.symbol) {
           // It's not clear when this can happen, but if it does all we
           // do is fail to emit the @implements, which isn't so harmful.
@@ -478,9 +478,9 @@ function maybeAddHeritageClauses(
         alias = type.symbol;
       }
       if (alias.flags & ts.SymbolFlags.Alias) {
-        alias = context.typeChecker.getAliasedSymbol(alias);
+        alias = mtt.typeChecker.getAliasedSymbol(alias);
       }
-      const typeTranslator = context.newTypeTranslator(impl.expression);
+      const typeTranslator = mtt.newTypeTranslator(impl.expression);
       if (typeTranslator.isBlackListed(alias)) {
         continue;
       }
@@ -526,9 +526,9 @@ function maybeAddHeritageClauses(
  *    function statement; for overloads, name will have been merged.
  */
 function getFunctionTypeJSDoc(
-    context: ModuleTypeTranslator, fnDecls: ts.SignatureDeclaration[],
+    mtt: ModuleTypeTranslator, fnDecls: ts.SignatureDeclaration[],
     extraTags: jsdoc.Tag[] = []): [jsdoc.Tag[], string[]] {
-  const typeChecker = context.typeChecker;
+  const typeChecker = mtt.typeChecker;
   const newDoc = extraTags;
   const lens = fnDecls.map(fnDecl => fnDecl.parameters.length);
   const minArgsCount = Math.min(...lens);
@@ -547,7 +547,7 @@ function getFunctionTypeJSDoc(
     // Construct the JSDoc comment by reading the existing JSDoc, if
     // any, and merging it with the known types of the function
     // parameters and return type.
-    const tags = context.getJSDoc(fnDecl);
+    const tags = mtt.getJSDoc(fnDecl);
 
     // Copy all the tags other than @param/@return into the new
     // JSDoc without any change; @param/@return are handled specially.
@@ -600,7 +600,7 @@ function getFunctionTypeJSDoc(
         if (!typeRef.typeArguments) throw new Error('invalid rest param');
         type = typeRef.typeArguments![0];
       }
-      newTag.type = context.typeToClosure(fnDecl, type);
+      newTag.type = mtt.typeToClosure(fnDecl, type);
 
       for (const {tagName, parameterName, text} of tags) {
         if (tagName === 'param' && parameterName === newTag.parameterName) {
@@ -615,7 +615,7 @@ function getFunctionTypeJSDoc(
     // Return type.
     if (!isConstructor) {
       const retType = typeChecker.getReturnTypeOfSignature(sig);
-      const retTypeString: string = context.typeToClosure(fnDecl, retType);
+      const retTypeString: string = mtt.typeToClosure(fnDecl, retType);
       let returnDoc: string|undefined;
       for (const {tagName, text} of tags) {
         if (tagName === 'return') {
@@ -679,7 +679,7 @@ const FIELD_DECLARATION_MODIFIERS: ts.ModifierFlags = ts.ModifierFlags.Private |
  * declare these in Closure you must declare these separately from the class.
  */
 function createMemberTypeDeclaration(
-    context: ModuleTypeTranslator,
+    mtt: ModuleTypeTranslator,
     typeDecl: ts.ClassDeclaration|ts.InterfaceDeclaration): ts.IfStatement|null {
   // Gather parameter properties from the constructor, if it exists.
   const ctors: ts.ConstructorDeclaration[] = [];
@@ -726,7 +726,7 @@ function createMemberTypeDeclaration(
   }
 
   if (!typeDecl.name) {
-    context.debugWarn(typeDecl, 'cannot add types on unnamed declarations');
+    mtt.debugWarn(typeDecl, 'cannot add types on unnamed declarations');
     return null;
   }
 
@@ -734,9 +734,9 @@ function createMemberTypeDeclaration(
   const staticPropAccess = ts.createIdentifier(className);
   const instancePropAccess = ts.createPropertyAccess(staticPropAccess, 'prototype');
   const propertyDecls = [
-    ...staticProps.map(p => createClosurePropertyDeclaration(context, staticPropAccess, p)),
-    ...nonStaticProps.map((p) => createClosurePropertyDeclaration(context, instancePropAccess, p)),
-    ...paramProps.map((p) => createClosurePropertyDeclaration(context, instancePropAccess, p)),
+    ...staticProps.map(p => createClosurePropertyDeclaration(mtt, staticPropAccess, p)),
+    ...nonStaticProps.map((p) => createClosurePropertyDeclaration(mtt, instancePropAccess, p)),
+    ...paramProps.map((p) => createClosurePropertyDeclaration(mtt, instancePropAccess, p)),
     ...unhandled.map(
         p => transformerUtil.createMultiLineComment(
             p, `Skipping unhandled member: ${escapeForComment(p.getText())}`)),
@@ -745,11 +745,11 @@ function createMemberTypeDeclaration(
   for (const fnDecl of abstractMethods) {
     const name = propertyName(fnDecl);
     if (!name) {
-      context.error(fnDecl, 'anonymous abstract function');
+      mtt.error(fnDecl, 'anonymous abstract function');
       continue;
     }
-    const [tags, paramNames] = getFunctionTypeJSDoc(context, [fnDecl], []);
-    if (hasExportingDecorator(fnDecl, context.typeChecker)) tags.push({tagName: 'export'});
+    const [tags, paramNames] = getFunctionTypeJSDoc(mtt, [fnDecl], []);
+    if (hasExportingDecorator(fnDecl, mtt.typeChecker)) tags.push({tagName: 'export'});
     // memberNamespace because abstract methods cannot be static in TypeScript.
     const abstractFnDecl = ts.createStatement(ts.createAssignment(
         ts.createPropertyAccess(instancePropAccess, name),
@@ -839,16 +839,16 @@ function escapeForComment(str: string): string {
 }
 
 function createClosurePropertyDeclaration(
-    context: ModuleTypeTranslator, expr: ts.Expression,
+    mtt: ModuleTypeTranslator, expr: ts.Expression,
     prop: ts.PropertyDeclaration|ts.PropertySignature|ts.ParameterDeclaration): ts.Statement|null {
   const name = propertyName(prop);
   if (!name) {
-    context.debugWarn(prop, `handle unnamed member:\n${escapeForComment(prop.getText())}`);
+    mtt.debugWarn(prop, `handle unnamed member:\n${escapeForComment(prop.getText())}`);
     return transformerUtil.createMultiLineComment(
         prop, `Skipping unnamed member:\n${escapeForComment(prop.getText())}`);
   }
 
-  let type = context.typeToClosure(prop);
+  let type = mtt.typeToClosure(prop);
   // When a property is optional, e.g.
   //   foo?: string;
   // Then the TypeScript type of the property is string|undefined, the
@@ -863,9 +863,9 @@ function createClosurePropertyDeclaration(
   // so the Closure type must be ?|undefined.
   if (prop.questionToken && type === '?') type += '|undefined';
 
-  const tags = context.getJSDoc(prop);
+  const tags = mtt.getJSDoc(prop);
   tags.push({tagName: 'type', type});
-  if (hasExportingDecorator(prop, context.typeChecker)) {
+  if (hasExportingDecorator(prop, mtt.typeChecker)) {
     tags.push({tagName: 'export'});
   }
   const declStmt =
@@ -886,23 +886,24 @@ export function jsdocTransformer(
     isCommonJS: boolean): (context: ts.TransformationContext) => ts.Transformer<ts.SourceFile> {
   return (context: ts.TransformationContext): ts.Transformer<ts.SourceFile> => {
     return (sourceFile: ts.SourceFile) => {
-      const jsdContext = new ModuleTypeTranslator(sourceFile, typeChecker, host, diagnostics);
+      const moduleTypeTranslator =
+          new ModuleTypeTranslator(sourceFile, typeChecker, host, diagnostics);
 
       function visitClassDeclaration(classDecl: ts.ClassDeclaration): ts.Statement[] {
-        const mjsdoc = jsdContext.getMutableJSDoc(classDecl);
+        const mjsdoc = moduleTypeTranslator.getMutableJSDoc(classDecl);
         if (hasModifierFlag(classDecl, ts.ModifierFlags.Abstract)) {
           mjsdoc.tags.push({tagName: 'abstract'});
         }
 
         maybeAddTemplateClause(mjsdoc.tags, classDecl);
         if (!host.untyped) {
-          maybeAddHeritageClauses(mjsdoc.tags, jsdContext, classDecl);
+          maybeAddHeritageClauses(mjsdoc.tags, moduleTypeTranslator, classDecl);
         }
         if (mjsdoc.tags.length > 0) {
           mjsdoc.updateComment();
         }
         const decls: ts.Statement[] = [];
-        const memberDecl = createMemberTypeDeclaration(jsdContext, classDecl);
+        const memberDecl = createMemberTypeDeclaration(moduleTypeTranslator, classDecl);
         // WARNING: order is significant; we must create the member decl before transforming away
         // parameter property comments when visiting the constructor.
         decls.push(ts.visitEachChild(classDecl, visitor, context));
@@ -913,21 +914,23 @@ export function jsdocTransformer(
       function visitInterfaceDeclaration(iface: ts.InterfaceDeclaration): ts.Statement[] {
         const sym = typeChecker.getSymbolAtLocation(iface.name);
         if (!sym) {
-          jsdContext.error(iface, 'interface with no symbol');
+          moduleTypeTranslator.error(iface, 'interface with no symbol');
           return [];
         }
         // If this symbol is both a type and a value, we cannot emit both into Closure's
         // single namespace.
         if (sym.flags & ts.SymbolFlags.Value) {
+          moduleTypeTranslator.debugWarn(
+              iface, `type/symbol conflict for ${sym.name}, using {?} for now`);
           return [transformerUtil.createSingleLineComment(
               iface, 'WARNING: interface has both a type and a value, skipping emit')];
         }
 
-        const tags = jsdContext.getJSDoc(iface) || [];
+        const tags = moduleTypeTranslator.getJSDoc(iface) || [];
         tags.push({tagName: 'record'});
         maybeAddTemplateClause(tags, iface);
         if (!host.untyped) {
-          maybeAddHeritageClauses(tags, jsdContext, iface);
+          maybeAddHeritageClauses(tags, moduleTypeTranslator, iface);
         }
         const name = getIdentifierText(iface.name);
         const modifiers = hasModifierFlag(iface, ts.ModifierFlags.Export) ?
@@ -946,7 +949,7 @@ export function jsdocTransformer(
                 ),
             iface);
         addCommentOn(decl, tags);
-        const memberDecl = createMemberTypeDeclaration(jsdContext, iface);
+        const memberDecl = createMemberTypeDeclaration(moduleTypeTranslator, iface);
         return memberDecl ? [decl, memberDecl] : [decl];
       }
 
@@ -961,11 +964,11 @@ export function jsdocTransformer(
         const extraTags = [];
         if (hasExportingDecorator(fnDecl, typeChecker)) extraTags.push({tagName: 'export'});
 
-        const [tags, ] = getFunctionTypeJSDoc(jsdContext, [fnDecl], extraTags);
-        const mjsdoc = jsdContext.getMutableJSDoc(fnDecl);
+        const [tags, ] = getFunctionTypeJSDoc(moduleTypeTranslator, [fnDecl], extraTags);
+        const mjsdoc = moduleTypeTranslator.getMutableJSDoc(fnDecl);
         mjsdoc.tags = tags;
         mjsdoc.updateComment();
-        jsdContext.blacklistTypeParameters(fnDecl, fnDecl.typeParameters);
+        moduleTypeTranslator.blacklistTypeParameters(fnDecl, fnDecl.typeParameters);
       }
 
       /**
@@ -979,7 +982,7 @@ export function jsdocTransformer(
         // "const", "let", etc are stored in node flags on the declarationList.
         const flags = ts.getCombinedNodeFlags(varStmt.declarationList);
 
-        let tags: jsdoc.Tag[]|null = jsdContext.getJSDoc(varStmt);
+        let tags: jsdoc.Tag[]|null = moduleTypeTranslator.getJSDoc(varStmt);
         const leading = ts.getSyntheticLeadingComments(varStmt);
         if (leading) {
           // Attach non-JSDoc comments to a not emitted statement.
@@ -1004,11 +1007,12 @@ export function jsdocTransformer(
             // the `?` the code below would emit.
             // TODO(martinprobst): consider doing this for all types that get emitted as ?, not just
             // for blacklisted ones.
-            const blackListedInitialized = !!decl.initializer && jsdContext.isBlackListed(decl);
+            const blackListedInitialized =
+                !!decl.initializer && moduleTypeTranslator.isBlackListed(decl);
             if (!blackListedInitialized) {
               // getOriginalNode(decl) is required because the type checker cannot type check
               // synthesized nodes.
-              const typeStr = jsdContext.typeToClosure(ts.getOriginalNode(decl));
+              const typeStr = moduleTypeTranslator.typeToClosure(ts.getOriginalNode(decl));
               localTags.push({tagName: 'type', type: typeStr});
             }
           }
@@ -1024,7 +1028,7 @@ export function jsdocTransformer(
       function visitTypeAliasDeclaration(typeAlias: ts.TypeAliasDeclaration): ts.Statement[] {
         // If the type is also defined as a value, skip emitting it. Closure collapses type & value
         // namespaces, the two emits would conflict if tsickle emitted both.
-        const sym = jsdContext.mustGetSymbolAtLocation(typeAlias.name);
+        const sym = moduleTypeTranslator.mustGetSymbolAtLocation(typeAlias.name);
         if (sym.flags & ts.SymbolFlags.Value) return [];
         // Type aliases are always emitted as the resolved underlying type, so there is no need to
         // emit anything, except for exported types.
@@ -1039,9 +1043,10 @@ export function jsdocTransformer(
 
         // Blacklist any type parameters, Closure does not support type aliases with type
         // parameters.
-        jsdContext.newTypeTranslator(typeAlias).blacklistTypeParameters(
-            jsdContext.symbolsToAliasedNames, typeAlias.typeParameters);
-        const typeStr = host.untyped ? '?' : jsdContext.typeToClosure(typeAlias, undefined);
+        moduleTypeTranslator.newTypeTranslator(typeAlias).blacklistTypeParameters(
+            moduleTypeTranslator.symbolsToAliasedNames, typeAlias.typeParameters);
+        const typeStr =
+            host.untyped ? '?' : moduleTypeTranslator.typeToClosure(typeAlias, undefined);
         // In the case of an export, we cannot emit a `export var foo;` because TypeScript drops
         // exports that are never assigned values, and Closure requires us to not assign values to
         // typedef exports. Introducing a new local variable and exporting it can cause bugs due to
@@ -1053,7 +1058,7 @@ export function jsdocTransformer(
         // and also across modules). For downstream JavaScript code that imports the typedef, we
         // emit an "export.Foo;" that declares and exports the type, and for TypeScript has no
         // impact.
-        const tags = jsdContext.getJSDoc(typeAlias);
+        const tags = moduleTypeTranslator.getJSDoc(typeAlias);
         tags.push({tagName: 'typedef', type: typeStr});
         const decl = ts.setSourceMapRange(
             ts.createStatement(ts.createPropertyAccess(
@@ -1066,8 +1071,8 @@ export function jsdocTransformer(
       /** Emits a parenthesized Closure cast: `(/** \@type ... * / (expr))`. */
       function createClosureCast(context: ts.Node, expression: ts.Expression, type: ts.Type) {
         const inner = ts.createParen(expression);
-        const comment =
-            addCommentOn(inner, [{tagName: 'type', type: jsdContext.typeToClosure(context, type)}]);
+        const comment = addCommentOn(
+            inner, [{tagName: 'type', type: moduleTypeTranslator.typeToClosure(context, type)}]);
         comment.hasTrailingNewLine = false;
         return ts.setSourceMapRange(ts.createParen(inner), context);
       }
@@ -1103,7 +1108,7 @@ export function jsdocTransformer(
         // Write the export declaration here so that forward declares come after it, and
         // fileoverview comments do not get moved behind statements.
         const importPath = (importDecl.moduleSpecifier as ts.StringLiteral).text;
-        jsdContext.forwardDeclare(
+        moduleTypeTranslator.forwardDeclare(
             importPath, sym, /* isExplicitlyImported? */ true,
             /* default import? */ !!importDecl.importClause.name);
         return importDecl;
@@ -1152,7 +1157,7 @@ export function jsdocTransformer(
 
       sourceFile = ts.visitEachChild(sourceFile, visitor, context);
 
-      return jsdContext.insertForwardDeclares(sourceFile);
+      return moduleTypeTranslator.insertForwardDeclares(sourceFile);
     };
   };
 }
