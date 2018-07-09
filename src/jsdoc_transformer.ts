@@ -43,6 +43,10 @@ export interface AnnotatorHost {
 }
 
 
+/**
+ * MutableJSDoc encapsulates a (potential) JSDoc comment on a specific node, and allows code to
+ * modify (including delete) it.
+ */
 class MutableJSDoc {
   constructor(
       private node: ts.Node, private sourceComment: ts.SynthesizedComment|null,
@@ -87,7 +91,12 @@ function addCommentOn(node: ts.Node, tags: jsdoc.Tag[], escapeExtraTags?: Set<st
   return comment;
 }
 
-class JSDocTransformerContext {
+/**
+ * ModuleTypeTranslator encapsulates knowledge and helper functions to translate types in the scope
+ * of a specific module. This includes managing Closure forward declare statements and any symbol
+ * aliases in scope for a whole file.
+ */
+class ModuleTypeTranslator {
   /**
    * A mapping of aliases for symbols in the current file, used when emitting types. TypeScript
    * emits imported symbols with unpredictable prefixes. To generate correct type annotations,
@@ -108,8 +117,11 @@ class JSDocTransformerContext {
   private forwardDeclareCounter = 0;
 
   constructor(
-      private host: AnnotatorHost, private diagnostics: ts.Diagnostic[],
-      public typeChecker: ts.TypeChecker, public sourceFile: ts.SourceFile) {}
+      public sourceFile: ts.SourceFile,
+      public typeChecker: ts.TypeChecker,
+      private host: AnnotatorHost,
+      private diagnostics: ts.Diagnostic[],
+  ) {}
 
   logWarning(warning: ts.Diagnostic) {
     if (this.host.logWarning) this.host.logWarning(warning);
@@ -234,7 +246,7 @@ class JSDocTransformerContext {
    * This also registers aliases for symbols from the module that map to this forward declare.
    */
   forwardDeclare(
-      importPath: string, moduleSymbol: ts.Symbol|undefined, isExplicitlyImported: boolean,
+      importPath: string, moduleSymbol: ts.Symbol|undefined, isExplicitImport: boolean,
       isDefaultImport = false) {
     if (this.host.untyped) return;
     const nsImport = googmodule.extractGoogNamespaceImport(importPath);
@@ -277,7 +289,7 @@ class JSDocTransformerContext {
       // they do not count as values. If preserveConstEnums=true, this shouldn't hurt.
       return isValue && !isConstEnum;
     });
-    if (isExplicitlyImported && !hasValues) {
+    if (isExplicitImport && !hasValues) {
       // Closure Compiler's toolchain will drop files that are never goog.require'd *before* type
       // checking (e.g. when using --closure_entry_point or similar tools). This causes errors
       // complaining about values not matching 'NoResolvedType', or modules not having a certain
@@ -413,7 +425,7 @@ function maybeAddTemplateClause(docTags: jsdoc.Tag[], decl: HasTypeParameters) {
 }
 
 function maybeAddHeritageClauses(
-    docTags: jsdoc.Tag[], context: JSDocTransformerContext,
+    docTags: jsdoc.Tag[], context: ModuleTypeTranslator,
     decl: ts.ClassLikeDeclaration|ts.InterfaceDeclaration) {
   if (!decl.heritageClauses) return;
   const isClass = decl.kind === ts.SyntaxKind.ClassDeclaration;
@@ -514,7 +526,7 @@ function maybeAddHeritageClauses(
  *    function statement; for overloads, name will have been merged.
  */
 function getFunctionTypeJSDoc(
-    context: JSDocTransformerContext, fnDecls: ts.SignatureDeclaration[],
+    context: ModuleTypeTranslator, fnDecls: ts.SignatureDeclaration[],
     extraTags: jsdoc.Tag[] = []): [jsdoc.Tag[], string[]] {
   const typeChecker = context.typeChecker;
   const newDoc = extraTags;
@@ -667,7 +679,7 @@ const FIELD_DECLARATION_MODIFIERS: ts.ModifierFlags = ts.ModifierFlags.Private |
  * declare these in Closure you must declare these separately from the class.
  */
 function createMemberTypeDeclaration(
-    context: JSDocTransformerContext,
+    context: ModuleTypeTranslator,
     typeDecl: ts.ClassDeclaration|ts.InterfaceDeclaration): ts.IfStatement|null {
   // Gather parameter properties from the constructor, if it exists.
   const ctors: ts.ConstructorDeclaration[] = [];
@@ -827,7 +839,7 @@ function escapeForComment(str: string): string {
 }
 
 function createClosurePropertyDeclaration(
-    context: JSDocTransformerContext, expr: ts.Expression,
+    context: ModuleTypeTranslator, expr: ts.Expression,
     prop: ts.PropertyDeclaration|ts.PropertySignature|ts.ParameterDeclaration): ts.Statement|null {
   const name = propertyName(prop);
   if (!name) {
@@ -874,7 +886,7 @@ export function jsdocTransformer(
     isCommonJS: boolean): (context: ts.TransformationContext) => ts.Transformer<ts.SourceFile> {
   return (context: ts.TransformationContext): ts.Transformer<ts.SourceFile> => {
     return (sourceFile: ts.SourceFile) => {
-      const jsdContext = new JSDocTransformerContext(host, diagnostics, typeChecker, sourceFile);
+      const jsdContext = new ModuleTypeTranslator(sourceFile, typeChecker, host, diagnostics);
 
       function visitClassDeclaration(classDecl: ts.ClassDeclaration): ts.Statement[] {
         const mjsdoc = jsdContext.getMutableJSDoc(classDecl);
