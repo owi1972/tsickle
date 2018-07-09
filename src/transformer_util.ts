@@ -698,7 +698,6 @@ export function createSingleQuoteStringLiteral(text: string): ts.StringLiteral {
 
 /** Creates a not emitted statement with the given text as a single line comment. */
 export function createSingleLineComment(original: ts.Node, text: string) {
-  const notEmitted = ts.createNotEmittedStatement(original);
   const comment: ts.SynthesizedComment = {
     kind: ts.SyntaxKind.SingleLineCommentTrivia,
     text: ' ' + text,
@@ -706,6 +705,18 @@ export function createSingleLineComment(original: ts.Node, text: string) {
     pos: -1,
     end: -1,
   };
-  ts.setSyntheticTrailingComments(notEmitted, [comment]);
-  return notEmitted;
+  return ts.setSyntheticTrailingComments(ts.createNotEmittedStatement(original), [comment]);
+}
+
+/** Creates a not emitted statement with the given text as a single line comment. */
+export function createMultiLineComment(original: ts.Node, text: string) {
+  const notEmitted = ts.createNotEmittedStatement(original);
+  const comment: ts.SynthesizedComment = {
+    kind: ts.SyntaxKind.MultiLineCommentTrivia,
+    text: ' ' + text,
+    hasTrailingNewLine: true,
+    pos: -1,
+    end: -1,
+  };
+  return ts.setSyntheticTrailingComments(ts.createNotEmittedStatement(original), [comment]);
 }

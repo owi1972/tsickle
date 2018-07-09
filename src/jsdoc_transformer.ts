@@ -233,7 +233,9 @@ class JSDocTransformerContext {
    * Returns the `const x = goog.forwardDeclare...` text for an import of the given `importPath`.
    * This also registers aliases for symbols from the module that map to this forward declare.
    */
-  forwardDeclare(importPath: string, moduleSymbol: ts.Symbol|undefined, isDefaultImport = false) {
+  forwardDeclare(
+      importPath: string, moduleSymbol: ts.Symbol|undefined, isExplicitlyImported: boolean,
+      isDefaultImport = false) {
     if (this.host.untyped) return;
     const nsImport = googmodule.extractGoogNamespaceImport(importPath);
     const forwardDeclarePrefix = `tsickle_forward_declare_${++this.forwardDeclareCounter}`;
@@ -275,7 +277,7 @@ class JSDocTransformerContext {
       // they do not count as values. If preserveConstEnums=true, this shouldn't hurt.
       return isValue && !isConstEnum;
     });
-    if (!hasValues) {
+    if (isExplicitlyImported && !hasValues) {
       // Closure Compiler's toolchain will drop files that are never goog.require'd *before* type
       // checking (e.g. when using --closure_entry_point or similar tools). This causes errors
       // complaining about values not matching 'NoResolvedType', or modules not having a certain
@@ -331,7 +333,7 @@ class JSDocTransformerContext {
     // Already imported?
     if (this.forwardDeclaredModules.has(moduleSymbol)) return;
     // TODO(martinprobst): this should possibly use fileNameToModuleId.
-    this.forwardDeclare(sourceFile.fileName, moduleSymbol);
+    this.forwardDeclare(sourceFile.fileName, moduleSymbol, false);
   }
 
   insertForwardDeclares(sourceFile: ts.SourceFile) {
@@ -414,9 +416,11 @@ function maybeAddHeritageClauses(
     docTags: jsdoc.Tag[], context: JSDocTransformerContext,
     decl: ts.ClassLikeDeclaration|ts.InterfaceDeclaration) {
   if (!decl.heritageClauses) return;
+  const isClass = decl.kind === ts.SyntaxKind.ClassDeclaration;
+  const classHasSuperClass =
+      isClass && decl.heritageClauses.some(hc => hc.token === ts.SyntaxKind.ExtendsKeyword);
   for (const heritage of decl.heritageClauses!) {
     if (!heritage.types) continue;
-    const isClass = decl.kind === ts.SyntaxKind.ClassDeclaration;
     if (isClass && heritage.token !== ts.SyntaxKind.ImplementsKeyword && !isAmbient(decl)) {
       // If a class has "extends Foo", that is preserved in the ES6 output
       // and we don't need to do anything.  But if it has "implements Foo",
@@ -429,9 +433,6 @@ function maybeAddHeritageClauses(
     for (const impl of heritage.types) {
       let tagName = decl.kind === ts.SyntaxKind.InterfaceDeclaration ? 'extends' : 'implements';
 
-      // We can only @implements an interface, not a class.
-      // But it's fine to translate TS "implements Class" into Closure
-      // "@extends {Class}" because this is just a type hint.
       const sym = context.typeChecker.getSymbolAtLocation(impl.expression);
       if (!sym) {
         // It's possible for a class declaration to extend an expression that
@@ -471,12 +472,21 @@ function maybeAddHeritageClauses(
       if (typeTranslator.isBlackListed(alias)) {
         continue;
       }
+      // We can only @implements an interface, not a class.
+      // But it's fine to translate TS "implements Class" into Closure
+      // "@extends {Class}" because this is just a type hint.
       if (alias.flags & ts.SymbolFlags.Class) {
         if (!isClass) {
           // Only classes can extend classes in TS. Ignoring the heritage clause should be safe,
           // as interfaces are @record anyway, so should prevent property disambiguation.
 
           // Problem: validate that methods are there?
+          continue;
+        }
+        if (classHasSuperClass && heritage.token !== ts.SyntaxKind.ExtendsKeyword) {
+          // Do not emit an @extends for a class that already has a proper ES6 extends class. This
+          // risks incorrect optimization, as @extends takes precedence, and Closure won't be
+          // aware of the actual type hierarchy of the class.
           continue;
         }
         tagName = 'extends';
@@ -487,7 +497,7 @@ function maybeAddHeritageClauses(
         continue;
       }
       // typeToClosure includes nullability modifiers, so call symbolToString directly here.
-      docTags.push({tagName, type: typeTranslator.symbolToString(sym, true)});
+      docTags.push({tagName, type: typeTranslator.symbolToString(alias, true)});
     }
   }
 }
@@ -664,6 +674,7 @@ function createMemberTypeDeclaration(
   let paramProps: ts.ParameterDeclaration[] = [];
   const nonStaticProps: Array<ts.PropertyDeclaration|ts.PropertySignature> = [];
   const staticProps: Array<ts.PropertyDeclaration|ts.PropertySignature> = [];
+  const unhandled: ts.NamedDeclaration[] = [];
   const abstractMethods: ts.FunctionLikeDeclaration[] = [];
   for (const member of typeDecl.members) {
     if (member.kind === ts.SyntaxKind.Constructor) {
@@ -676,13 +687,17 @@ function createMemberTypeDeclaration(
         nonStaticProps.push(member);
       }
     } else if (
-        (hasModifierFlag(member, ts.ModifierFlags.Abstract) ||
-         ts.isInterfaceDeclaration(typeDecl)) &&
-        (member.kind === ts.SyntaxKind.MethodDeclaration ||
-         member.kind === ts.SyntaxKind.MethodSignature ||
-         member.kind === ts.SyntaxKind.GetAccessor || member.kind === ts.SyntaxKind.SetAccessor)) {
-      abstractMethods.push(
-          member as ts.MethodDeclaration | ts.GetAccessorDeclaration | ts.SetAccessorDeclaration);
+        member.kind === ts.SyntaxKind.MethodDeclaration ||
+        member.kind === ts.SyntaxKind.MethodSignature ||
+        member.kind === ts.SyntaxKind.GetAccessor || member.kind === ts.SyntaxKind.SetAccessor) {
+      if (hasModifierFlag(member, ts.ModifierFlags.Abstract) ||
+          ts.isInterfaceDeclaration(typeDecl)) {
+        abstractMethods.push(
+            member as ts.MethodDeclaration | ts.GetAccessorDeclaration | ts.SetAccessorDeclaration);
+      }
+      // Non-abstract methods only exist on classes, and are handled in regular emit.
+    } else {
+      unhandled.push(member);
     }
   }
 
@@ -710,6 +725,9 @@ function createMemberTypeDeclaration(
     ...staticProps.map(p => createClosurePropertyDeclaration(context, staticPropAccess, p)),
     ...nonStaticProps.map((p) => createClosurePropertyDeclaration(context, instancePropAccess, p)),
     ...paramProps.map((p) => createClosurePropertyDeclaration(context, instancePropAccess, p)),
+    ...unhandled.map(
+        p => transformerUtil.createMultiLineComment(
+            p, `Skipping unhandled member: ${escapeForComment(p.getText())}`)),
   ];
 
   for (const fnDecl of abstractMethods) {
@@ -813,8 +831,9 @@ function createClosurePropertyDeclaration(
     prop: ts.PropertyDeclaration|ts.PropertySignature|ts.ParameterDeclaration): ts.Statement|null {
   const name = propertyName(prop);
   if (!name) {
-    context.debugWarn(prop, `handle strange member:\n${escapeForComment(prop.getText())}`);
-    return null;
+    context.debugWarn(prop, `handle unnamed member:\n${escapeForComment(prop.getText())}`);
+    return transformerUtil.createMultiLineComment(
+        prop, `Skipping unnamed member:\n${escapeForComment(prop.getText())}`);
   }
 
   let type = context.typeToClosure(prop);
@@ -889,7 +908,7 @@ export function jsdocTransformer(
         // single namespace.
         if (sym.flags & ts.SymbolFlags.Value) {
           return [transformerUtil.createSingleLineComment(
-              iface, 'interface has both a type and a value, skipping emit')];
+              iface, 'WARNING: interface has both a type and a value, skipping emit')];
         }
 
         const tags = jsdContext.getJSDoc(iface) || [];
@@ -902,7 +921,7 @@ export function jsdocTransformer(
         const modifiers = hasModifierFlag(iface, ts.ModifierFlags.Export) ?
             [ts.createToken(ts.SyntaxKind.ExportKeyword)] :
             undefined;
-        const decl = ts.setOriginalNode(
+        const decl = ts.setSourceMapRange(
             ts.createFunctionDeclaration(
                 /* decorators */ undefined,
                 modifiers,
@@ -975,7 +994,9 @@ export function jsdocTransformer(
             // for blacklisted ones.
             const blackListedInitialized = !!decl.initializer && jsdContext.isBlackListed(decl);
             if (!blackListedInitialized) {
-              const typeStr = jsdContext.typeToClosure(decl);
+              // getOriginalNode(decl) is required because the type checker cannot type check
+              // synthesized nodes.
+              const typeStr = jsdContext.typeToClosure(ts.getOriginalNode(decl));
               localTags.push({tagName: 'type', type: typeStr});
             }
           }
@@ -1031,12 +1052,31 @@ export function jsdocTransformer(
       }
 
       /** Emits a parenthesized Closure cast: `(/** \@type ... * / (expr))`. */
-      function visitAssertionExpression(assertion: ts.AssertionExpression) {
-        const inner = ts.createParen(assertion.expression);
-        const comment = addCommentOn(
-            inner, [{tagName: 'type', type: jsdContext.typeToClosure(assertion.type)}]);
+      function createClosureCast(context: ts.Node, expression: ts.Expression, type: ts.Type) {
+        const inner = ts.createParen(expression);
+        const comment =
+            addCommentOn(inner, [{tagName: 'type', type: jsdContext.typeToClosure(context, type)}]);
         comment.hasTrailingNewLine = false;
-        return ts.createParen(inner);
+        return ts.setSourceMapRange(ts.createParen(inner), context);
+      }
+
+      /** Converts a TypeScript type assertion into a Closure Cast. */
+      function visitAssertionExpression(assertion: ts.AssertionExpression) {
+        const expression = ts.visitNode(assertion.expression, visitor);
+        const type = typeChecker.getTypeAtLocation(assertion.type);
+        return createClosureCast(assertion, expression, type);
+      }
+
+      /**
+       * Converts a TypeScript non-null assertion into a Closure Cast, by stripping |null and
+       * |undefined from a union type.
+       */
+      function visitNonNullExpression(nonNull: ts.NonNullExpression) {
+        const expression = ts.visitNode(nonNull.expression, visitor);
+        const type = typeChecker.getTypeAtLocation(nonNull.expression);
+        const nonNullType = typeChecker.getNonNullableType(type);
+        const nullableFlags = ts.TypeFlags.Null | ts.TypeFlags.Undefined;
+        return createClosureCast(nonNull, expression, nonNullType);
       }
 
       function visitImportDeclaration(importDecl: ts.ImportDeclaration) {
@@ -1052,7 +1092,8 @@ export function jsdocTransformer(
         // fileoverview comments do not get moved behind statements.
         const importPath = (importDecl.moduleSpecifier as ts.StringLiteral).text;
         jsdContext.forwardDeclare(
-            importPath, sym, /* default import? */ !!importDecl.importClause.name);
+            importPath, sym, /* isExplicitlyImported? */ true,
+            /* default import? */ !!importDecl.importClause.name);
         return importDecl;
       }
 
@@ -1087,6 +1128,8 @@ export function jsdocTransformer(
           case ts.SyntaxKind.TypeAssertionExpression:
           case ts.SyntaxKind.AsExpression:
             return visitAssertionExpression(node as ts.AssertionExpression);
+          case ts.SyntaxKind.NonNullExpression:
+            return visitNonNullExpression(node as ts.NonNullExpression);
           case ts.SyntaxKind.ImportDeclaration:
             return visitImportDeclaration(node as ts.ImportDeclaration);
           default:
