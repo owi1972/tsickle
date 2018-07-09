@@ -8,15 +8,18 @@ var module = module || { id: 'test_files/interface/interface_type_params.ts' };
  * @record
  */
 function UpperBound() { }
-/** @type {number} */
-UpperBound.prototype.x;
-// unsupported: template constraints.
+if (false) {
+    /** @type {number} */
+    UpperBound.prototype.x;
+}
 /**
  * @record
  * @template T, U
  */
 function WithTypeParam() { }
-/** @type {T} */
-WithTypeParam.prototype.tea;
-/** @type {U} */
-WithTypeParam.prototype.you;
+if (false) {
+    /** @type {T} */
+    WithTypeParam.prototype.tea;
+    /** @type {U} */
+    WithTypeParam.prototype.you;
+}

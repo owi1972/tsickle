@@ -10,11 +10,16 @@ var module = module || { id: 'test_files/import_only_types/types_only.ts' };
  */
 function Foo() { }
 exports.Foo = Foo;
-/** @type {string} */
-Foo.prototype.x;
+if (false) {
+    /** @type {string} */
+    Foo.prototype.x;
+}
 /** @typedef {number} */
 exports.Bar;
-/** @typedef {function(): void} */
+/**
+ * A type that will be used within this file below.
+ * @typedef {function(): void}
+ */
 exports.FnType;
 /**
  * Uses exported types to demonstrate that the symbols can be resolved locally.

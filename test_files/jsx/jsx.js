@@ -2,6 +2,7 @@
  * @fileoverview added by tsickle
  * @suppress {checkTypes,extraRequire,uselessCode} checked by tsc
  */
+// Fake a subcomponent, just to exercise components within components.
 goog.module('test_files.jsx.jsx.tsx');
 var module = module || { id: 'test_files/jsx/jsx.tsx' };
 /** @type {!JSX.Element} */
@@ -13,4 +14,4 @@ let helloDiv = React.createElement("div", null,
     hello,
     "hello, world",
     React.createElement(Component, null));
-React.render(helloDiv, /** @type {!HTMLElement} */ ((document.body)));
+React.render(helloDiv, (/** @type {!HTMLElement} */ (document.body)));

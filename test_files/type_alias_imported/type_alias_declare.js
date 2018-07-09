@@ -12,5 +12,7 @@ var module = module || { id: 'test_files/type_alias_imported/type_alias_declare.
  */
 function X() { }
 exports.X = X;
-/** @type {string} */
-X.prototype.x;
+if (false) {
+    /** @type {string} */
+    X.prototype.x;
+}

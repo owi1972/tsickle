@@ -9,7 +9,7 @@ var module = module || { id: 'test_files/promisectorlike/promisectorlike.ts' };
  * @return {!Promise<string>}
  */
 function toPromise(ctorLike) {
-    return /** @type {!Promise<string>} */ (new ctorLike((resolve, reject) => {
+    return (/** @type {!Promise<string>} */ (new ctorLike((resolve, reject) => {
         reject('grumpycat');
-    }));
+    })));
 }

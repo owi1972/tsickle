@@ -9,5 +9,7 @@ var module = module || { id: 'test_files/transitive_symbol_type_only/exporter.ts
  */
 function ExportedInterface() { }
 exports.ExportedInterface = ExportedInterface;
-/** @type {number} */
-ExportedInterface.prototype.x;
+if (false) {
+    /** @type {number} */
+    ExportedInterface.prototype.x;
+}

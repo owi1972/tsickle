@@ -9,5 +9,7 @@ var module = module || { id: 'test_files/implement_reexported_interface/interfac
  */
 function ExportedInterface() { }
 exports.ExportedInterface = ExportedInterface;
-/** @type {string} */
-ExportedInterface.prototype.fooStr;
+if (false) {
+    /** @type {string} */
+    ExportedInterface.prototype.fooStr;
+}

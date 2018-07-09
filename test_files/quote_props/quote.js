@@ -24,13 +24,14 @@ quoted["hello"] = 1;
  * @extends {Quoted}
  */
 function QuotedMixed() { }
+if (false) {
 /** @type {number} */
 QuotedMixed.prototype.foo;
-/* TODO: handle strange member:
-'invalid-identifier': number;
-*/
+    /* Skipping unnamed member:
+    'invalid-identifier': number;*/
 /** @type {number} */
 QuotedMixed.prototype.quotedIdent;
+}
 /** @type {!QuotedMixed} */
 let quotedMixed = { foo: 1, 'invalid-identifier': 2, 'quotedIdent': 3 };
 console.log(quotedMixed.foo);
@@ -42,6 +43,7 @@ quotedMixed['foo'] = 1;
 quotedMixed['invalid-identifier'] = 1;
 // Must not be converted to non-quoted access because it was declared quoted.
 quotedMixed['quotedIdent'] = 1;
+// any does not declare any symbols.
 /** @type {?} */
 let anyTyped;
 console.log(anyTyped['token']);

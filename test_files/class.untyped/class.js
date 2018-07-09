@@ -8,8 +8,12 @@ var module = module || { id: 'test_files/class.untyped/class.ts' };
  * @record
  */
 function Interface() { }
-/** @type {?} */
-Interface.prototype.interfaceFunc;
+if (false) {
+    /**
+     * @return {?}
+     */
+    Interface.prototype.interfaceFunc = function () { };
+}
 class Super {
     /**
      * @return {?}
@@ -42,6 +46,7 @@ class ImplementsTypeAlias {
      */
     superFunc() { }
 }
+// Verify Closure accepts the various casts.
 /** @type {?} */
 let interfaceVar;
 interfaceVar = new Implements();
@@ -52,6 +57,7 @@ let superVar;
 superVar = new Implements();
 superVar = new Extends();
 superVar = new ImplementsTypeAlias();
+// WARNING: interface has both a type and a value, skipping emit
 /**
  * @return {?}
  */

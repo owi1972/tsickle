@@ -3,6 +3,7 @@
  * @fileoverview added by tsickle
  * @suppress {checkTypes,extraRequire,uselessCode} checked by tsc
  */
+// WARNING: interface has both a type and a value, skipping emit
 goog.module('test_files.type.type');
 var module = module || { id: 'test_files/type/type.ts' };
 /** @type {?} */
