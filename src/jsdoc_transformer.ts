@@ -882,8 +882,9 @@ function createClosurePropertyDeclaration(
  * CommonJS module emit to Closure Compiler compatible goog.module and goog.require statements.
  */
 export function jsdocTransformer(
-    host: AnnotatorHost, typeChecker: ts.TypeChecker, diagnostics: ts.Diagnostic[],
-    isCommonJS: boolean): (context: ts.TransformationContext) => ts.Transformer<ts.SourceFile> {
+    host: AnnotatorHost, tsOptions: ts.CompilerOptions, tsHost: ts.CompilerHost,
+    typeChecker: ts.TypeChecker, diagnostics: ts.Diagnostic[]):
+    (context: ts.TransformationContext) => ts.Transformer<ts.SourceFile> {
   return (context: ts.TransformationContext): ts.Transformer<ts.SourceFile> => {
     return (sourceFile: ts.SourceFile) => {
       const moduleTypeTranslator =
@@ -1037,7 +1038,7 @@ export function jsdocTransformer(
         // types, so tsickle has to pick a module format. We're using CommonJS to emit googmodule,
         // and code not using googmodule doesn't care about the Closure annotations anyway, so just
         // skip emitting if the module target isn't commonjs.
-        if (!isCommonJS) return [];
+        if (tsOptions.module !== ts.ModuleKind.CommonJS) return [];
 
         const typeName = typeAlias.name.getText();
 
@@ -1107,7 +1108,10 @@ export function jsdocTransformer(
         if (!sym) return importDecl;
         // Write the export declaration here so that forward declares come after it, and
         // fileoverview comments do not get moved behind statements.
-        const importPath = (importDecl.moduleSpecifier as ts.StringLiteral).text;
+        const importPath = googmodule.resolveIndexShorthand(
+            {options: tsOptions, host: tsHost}, sourceFile.fileName,
+            (importDecl.moduleSpecifier as ts.StringLiteral).text);
+
         moduleTypeTranslator.forwardDeclare(
             importPath, sym, /* isExplicitlyImported? */ true,
             /* default import? */ !!importDecl.importClause.name);

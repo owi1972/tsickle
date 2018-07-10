@@ -1939,8 +1939,8 @@ export function emitWithTsickle(
     tsickleSourceTransformers.push(transformFileoverviewComment);
     tsickleSourceTransformers.push(
         exportStarTransformer(host, typeChecker, tsOptions, tsickleDiagnostics));
-    tsickleSourceTransformers.push(jsdocTransformer(
-        host, typeChecker, tsickleDiagnostics, tsOptions.module === ts.ModuleKind.CommonJS));
+    tsickleSourceTransformers.push(
+        jsdocTransformer(host, tsOptions, tsHost, typeChecker, tsickleDiagnostics));
     tsickleSourceTransformers.push(enumTransformer(typeChecker, tsickleDiagnostics));
     tsickleSourceTransformers.push(decoratorDownlevelTransformer(typeChecker, tsickleDiagnostics));
   } else if (host.transformDecorators) {
