@@ -246,9 +246,11 @@ class ModuleTypeTranslator {
    * This also registers aliases for symbols from the module that map to this forward declare.
    */
   forwardDeclare(
-      importPath: string, moduleSymbol: ts.Symbol|undefined, isExplicitImport: boolean,
+      importPath: string, moduleSymbol: ts.Symbol, isExplicitImport: boolean,
       isDefaultImport = false) {
     if (this.host.untyped) return;
+    // Already imported? Do not emit a duplicate forward declare.
+    if (this.forwardDeclaredModules.has(moduleSymbol)) return;
     const nsImport = googmodule.extractGoogNamespaceImport(importPath);
     const forwardDeclarePrefix = `tsickle_forward_declare_${++this.forwardDeclareCounter}`;
     const moduleNamespace = nsImport !== null ?
@@ -268,12 +270,6 @@ class ModuleTypeTranslator {
             ts.createCall(
                 ts.createPropertyAccess(ts.createIdentifier('goog'), 'forwardDeclare'), undefined,
                 [ts.createLiteral(moduleNamespace)]))]));
-    // Scripts do not have a symbol. Scripts can still be imported, either as side effect imports or
-    // with an empty import set ("{}"). TypeScript does not emit a runtime load for an import with
-    // an empty list of symbols, but the import forces any global declarations from the library to
-    // be visible, which is what users use this for. No symbols from the script need forward
-    // declaration, so just return.
-    if (!moduleSymbol) return;
     this.forwardDeclaredModules.add(moduleSymbol);
     const exports = this.typeChecker.getExportsOfModule(moduleSymbol).map(e => {
       if (e.flags & ts.SymbolFlags.Alias) {
@@ -339,11 +335,8 @@ class ModuleTypeTranslator {
     const sourceFile = decl.getSourceFile();
     if (sourceFile === ts.getOriginalNode(this.sourceFile)) return;
     const moduleSymbol = this.typeChecker.getSymbolAtLocation(sourceFile);
-    if (!moduleSymbol) {
-      return;  // A source file might not have a symbol if it's not a module (no ES6 im/exports).
-    }
-    // Already imported?
-    if (this.forwardDeclaredModules.has(moduleSymbol)) return;
+    // A source file might not have a symbol if it's not a module (no ES6 im/exports).
+    if (!moduleSymbol) return;
     // TODO(martinprobst): this should possibly use fileNameToModuleId.
     this.forwardDeclare(sourceFile.fileName, moduleSymbol, false);
   }
@@ -1104,7 +1097,11 @@ export function jsdocTransformer(
         // module because it's only used in type positions, the JSDoc comments still reference a
         // valid Closure level symbol.
         const sym = typeChecker.getSymbolAtLocation(importDecl.moduleSpecifier);
-        // modules might not have a symbol if they are unused.
+        // Scripts do not have a symbol, and neither do unused modules. Scripts can still be
+        // imported, either as side effect imports or with an empty import set ("{}"). TypeScript
+        // does not emit a runtime load for an import with an empty list of symbols, but the import
+        // forces any global declarations from the library to be visible, which is what users use
+        // this for. No symbols from the script need forward declaration, so just return.
         if (!sym) return importDecl;
         // Write the export declaration here so that forward declares come after it, and
         // fileoverview comments do not get moved behind statements.
