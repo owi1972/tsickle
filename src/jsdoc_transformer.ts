@@ -893,9 +893,7 @@ export function jsdocTransformer(
         if (!host.untyped) {
           maybeAddHeritageClauses(mjsdoc.tags, moduleTypeTranslator, classDecl);
         }
-        if (mjsdoc.tags.length > 0) {
-          mjsdoc.updateComment();
-        }
+        mjsdoc.updateComment();
         const decls: ts.Statement[] = [];
         const memberDecl = createMemberTypeDeclaration(moduleTypeTranslator, classDecl);
         // WARNING: order is significant; we must create the member decl before transforming away
@@ -1115,6 +1113,15 @@ export function jsdocTransformer(
         return importDecl;
       }
 
+      /**
+       * Closure Compiler will fail when it finds incorrect JSDoc tags on nodes. This function
+       * parses and then re-serializes JSDoc comments, escaping or removing illegal tags.
+       */
+      function escapeIllegalJSDoc(node: ts.Node) {
+        const mjsdoc = moduleTypeTranslator.getMutableJSDoc(node);
+        mjsdoc.updateComment();
+      }
+
       function visitor(node: ts.Node): ts.Node|ts.Node[] {
         switch (node.kind) {
           case ts.SyntaxKind.ClassDeclaration:
@@ -1130,6 +1137,10 @@ export function jsdocTransformer(
             break;
           case ts.SyntaxKind.VariableStatement:
             return visitVariableStatement(node as ts.VariableStatement);
+          case ts.SyntaxKind.PropertyDeclaration:
+          case ts.SyntaxKind.PropertyAssignment:
+            escapeIllegalJSDoc(node);
+            break;
           case ts.SyntaxKind.Parameter:
             // Parameter properties (e.g. `constructor(/** docs */ private foo: string)`) might have
             // JSDoc comments, including JSDoc tags recognized by Closure Compiler. Prevent emitting

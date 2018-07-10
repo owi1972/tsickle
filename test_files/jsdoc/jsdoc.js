@@ -52,9 +52,7 @@ class JSDocTest {
          * \@internal
          */
         this.x = [];
-        /** @enum {string} */
         this.badEnumThing = { A: 'a' };
-        /** @const {string} */
         this.badConstThing = 'a';
     }
 }
