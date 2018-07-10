@@ -135,12 +135,13 @@ class RedundantJSDocShouldBeStripped {
  * @return {void}
  */
 function JSDocWithBadTag() { }
-/** *
+/**
  * For example,
  * \@madeUpTag
-  @type {string} */
+ * @type {string}
+ */
 const c = 'c';
-/***
+/**
  * Don't emit type comments for Polymer behaviors,
  * as this breaks their closure plugin :-(
  *

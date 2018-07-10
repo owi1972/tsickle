@@ -208,11 +208,6 @@ export class TypeTranslator {
       }
       return this.stripClutzNamespace(fqn);
     }
-    // TypeScript resolves e.g. union types to their members, which can include symbols not declared
-    // in the current scope. Ensure that all symbols found this way are actually declared.
-    // This must happen before the alias check below, it might introduce a new alias for the symbol.
-    if ((sym.flags & ts.SymbolFlags.TypeParameter) === 0) this.ensureSymbolDeclared(sym);
-
     // This follows getSingleLineStringWriter in the TypeScript compiler.
     let str = '';
     function writeText(text: string) {
@@ -224,6 +219,11 @@ export class TypeTranslator {
       if (symbol.flags & ts.SymbolFlags.Alias) {
         symbol = this.typeChecker.getAliasedSymbol(symbol);
       }
+      // TypeScript resolves e.g. union types to their members, which can include symbols not
+      // declared in the current scope. Ensure that all symbols found this way are actually
+      // declared. This must happen before the alias check below, it might introduce a new alias for
+      // the symbol.
+      if ((sym.flags & ts.SymbolFlags.TypeParameter) === 0) this.ensureSymbolDeclared(sym);
       const alias = this.symbolsToAliasedNames.get(symbol);
       if (alias) {
         // If so, discard the entire current text and only use the alias - otherwise if a symbol has
