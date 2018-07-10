@@ -1,3 +1,4 @@
+// test_files/decorator/decorator.ts(13,66): warning TS0: should not emit a 'never' type
 /**
  * @fileoverview added by tsickle
  * @suppress {checkTypes,extraRequire,uselessCode} checked by tsc
@@ -5,17 +6,17 @@
 goog.module('test_files.decorator.decorator');
 var module = module || { id: 'test_files/decorator/decorator.ts' };
 var tslib_1 = goog.require('tslib');
-var default_export_1 = goog.require('test_files.decorator.default_export');
 const tsickle_forward_declare_1 = goog.forwardDeclare("test_files.decorator.default_export");
-var external_1 = goog.require('test_files.decorator.external');
 const tsickle_forward_declare_2 = goog.forwardDeclare("test_files.decorator.external");
-var external2_1 = goog.require('test_files.decorator.external2');
 const tsickle_forward_declare_3 = goog.forwardDeclare("test_files.decorator.external2");
 const tsickle_forward_declare_4 = goog.forwardDeclare("test_files.decorator.only_types");
-goog.require("test_files.decorator.only_types"); // force type-only module to be loaded
-var api = goog.require('test_files.decorator.only_types');
+goog.require('test_files.decorator.only_types'); // force type-only module to be loaded
 const tsickle_forward_declare_5 = goog.forwardDeclare("test_files.decorator.only_types");
-goog.require("test_files.decorator.only_types"); // force type-only module to be loaded
+goog.require('test_files.decorator.only_types'); // force type-only module to be loaded
+var default_export_1 = goog.require('test_files.decorator.default_export');
+var external_1 = goog.require('test_files.decorator.external');
+var external2_1 = goog.require('test_files.decorator.external2');
+var api = goog.require('test_files.decorator.only_types');
 /**
  * @param {!Object} a
  * @param {string} b
@@ -28,7 +29,7 @@ function decorator(a, b) { }
  * @param {string} b
  * @return {?}
  */
-function annotationDecorator(a, b) { return /** @type {null} */ ((null)); }
+function annotationDecorator(a, b) { return (/** @type {?} */ (null)); }
 /**
  * @param {?} t
  * @return {?}
@@ -36,6 +37,9 @@ function annotationDecorator(a, b) { return /** @type {null} */ ((null)); }
 function classDecorator(t) {
     return t;
 }
+// should not matter, but getDeclarations() returns this node too.
+// Comment comes after statement so that type alias does not have
+// a comment on its own.
 /**
  * \@Annotation
  * @param {?} t
@@ -66,13 +70,11 @@ class DecoratorTest {
      * @param {function(!tsickle_forward_declare_2.AType): string} fnUsingAType
      * @param {{constructor: function(string): void}=} valueWithCtorSignature
      */
-    constructor(a, anyDecorated, n, b, promise, arr, aClass, AClass, aRenamedClass, aClassWithGenerics, aType, defaultImport, localTypeAlias, otherClass, anotherClass, anotherType, anotherPrefixed, fnUsingAType, valueWithCtorSignature = {
-        /**
+    constructor(a, anyDecorated, n, b, promise, arr, aClass, AClass, aRenamedClass, aClassWithGenerics, aType, defaultImport, localTypeAlias, otherClass, anotherClass, anotherType, anotherPrefixed, fnUsingAType, valueWithCtorSignature = { /**
          * @param {string} x
          * @return {void}
          */
-        constructor(x) { }
-    }) { }
+        constructor(x) { } }) { }
     /**
      * @return {number}
      */
