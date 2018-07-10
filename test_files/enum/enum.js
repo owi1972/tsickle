@@ -53,7 +53,6 @@ const ComponentIndex = {
     Scheme: 1,
     UserInfo: 2,
     Domain: 0,
-    // Be sure to exercise the code with a 0 enum value.
     UserInfo2: 2,
 };
 ComponentIndex[ComponentIndex.Scheme] = 'Scheme';

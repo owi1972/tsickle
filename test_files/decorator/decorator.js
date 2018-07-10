@@ -11,8 +11,6 @@ const tsickle_forward_declare_2 = goog.forwardDeclare("test_files.decorator.exte
 const tsickle_forward_declare_3 = goog.forwardDeclare("test_files.decorator.external2");
 const tsickle_forward_declare_4 = goog.forwardDeclare("test_files.decorator.only_types");
 goog.require('test_files.decorator.only_types'); // force type-only module to be loaded
-const tsickle_forward_declare_5 = goog.forwardDeclare("test_files.decorator.only_types");
-goog.require('test_files.decorator.only_types'); // force type-only module to be loaded
 var default_export_1 = goog.require('test_files.decorator.default_export');
 var external_1 = goog.require('test_files.decorator.external');
 var external2_1 = goog.require('test_files.decorator.external2');
@@ -65,8 +63,8 @@ class DecoratorTest {
      * @param {!Map<string, number>} localTypeAlias
      * @param {!tsickle_forward_declare_3.OtherClass} otherClass
      * @param {!tsickle_forward_declare_3.OtherClass} anotherClass
-     * @param {!Array<!tsickle_forward_declare_5.AnotherType>} anotherType
-     * @param {!tsickle_forward_declare_5.AnotherType} anotherPrefixed
+     * @param {!Array<!tsickle_forward_declare_4.AnotherType>} anotherType
+     * @param {!tsickle_forward_declare_4.AnotherType} anotherPrefixed
      * @param {function(!tsickle_forward_declare_2.AType): string} fnUsingAType
      * @param {{constructor: function(string): void}=} valueWithCtorSignature
      */
