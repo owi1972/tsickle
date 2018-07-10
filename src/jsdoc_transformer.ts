@@ -334,35 +334,54 @@ class ModuleTypeTranslator {
     ]);
   }
 
-  getJSDoc(node: ts.Node): jsdoc.Tag[] {
-    const [tags, ] = this.parseJSDoc(node);
+  /**
+   * Parses and synthesizes comments on node, and returns the JSDoc from it, if any.
+   * @param reportWarnings if true, will report warnings from parsing the JSDoc. Set to false if
+   *     this is not the "main" location dealing with a node to avoid duplicated warnings.
+   */
+  getJSDoc(node: ts.Node, reportWarnings: boolean): jsdoc.Tag[] {
+    const [tags, ] = this.parseJSDoc(node, reportWarnings);
     return tags;
   }
 
   getMutableJSDoc(node: ts.Node): MutableJSDoc {
-    const [tags, comment] = this.parseJSDoc(node);
+    const [tags, comment] = this.parseJSDoc(node, /* reportWarnings */ true);
     return new MutableJSDoc(node, comment, tags);
   }
 
-  private parseJSDoc(node: ts.Node): [jsdoc.Tag[], ts.SynthesizedComment|null] {
-    const text = node.getFullText();
+  private parseJSDoc(node: ts.Node, reportWarnings: boolean):
+      [jsdoc.Tag[], ts.SynthesizedComment|null] {
+    // synthesizeLeadingComments below changes text locations for node, so extract the location here
+    // in case it is needed later to report diagnostics.
+    const start = node.getFullStart();
+    const length = node.getLeadingTriviaWidth(this.sourceFile);
+
     const comments = jsdoc.synthesizeLeadingComments(node);
     if (!comments || comments.length === 0) return [[], null];
 
     for (let i = comments.length - 1; i >= 0; i--) {
-      const parsed = jsdoc.parse(comments[i]);
+      const comment = comments[i];
+      const parsed = jsdoc.parse(comment);
       if (parsed) {
-        if (parsed.warnings) {
+        if (reportWarnings && parsed.warnings) {
+          let diagStart = start;
+          let diagLength = length;
+          if (comment.originalRange) {
+            // If known, report the precise range of the incorrect comment, otherwise just use the
+            // Node's full trivia width.
+            diagStart = comment.originalRange.pos;
+            diagLength = comment.originalRange.end - comment.originalRange.pos;
+          }
           this.diagnostics.push({
             file: this.sourceFile,
-            start: node.getFullStart(),
-            length: node.getStart() - node.getStart(),
+            start: diagStart,
+            length: diagLength,
             messageText: parsed.warnings.join('\n'),
             category: ts.DiagnosticCategory.Warning,
             code: 0,
           });
         }
-        return [parsed.tags, comments[i]];
+        return [parsed.tags, comment];
       }
     }
     return [[], null];
@@ -519,7 +538,7 @@ function getFunctionTypeJSDoc(
     // Construct the JSDoc comment by reading the existing JSDoc, if
     // any, and merging it with the known types of the function
     // parameters and return type.
-    const tags = mtt.getJSDoc(fnDecl);
+    const tags = mtt.getJSDoc(fnDecl, /* reportWarnings */ false);
 
     // Copy all the tags other than @param/@return into the new
     // JSDoc without any change; @param/@return are handled specially.
@@ -835,7 +854,7 @@ function createClosurePropertyDeclaration(
   // so the Closure type must be ?|undefined.
   if (prop.questionToken && type === '?') type += '|undefined';
 
-  const tags = mtt.getJSDoc(prop);
+  const tags = mtt.getJSDoc(prop, /* reportWarnings */ true);
   tags.push({tagName: 'type', type});
   if (hasExportingDecorator(prop, mtt.typeChecker)) {
     tags.push({tagName: 'export'});
@@ -897,7 +916,7 @@ export function jsdocTransformer(
               iface, 'WARNING: interface has both a type and a value, skipping emit')];
         }
 
-        const tags = moduleTypeTranslator.getJSDoc(iface) || [];
+        const tags = moduleTypeTranslator.getJSDoc(iface, /* reportWarnings */ true) || [];
         tags.push({tagName: 'record'});
         maybeAddTemplateClause(tags, iface);
         if (!host.untyped) {
@@ -953,7 +972,8 @@ export function jsdocTransformer(
         // "const", "let", etc are stored in node flags on the declarationList.
         const flags = ts.getCombinedNodeFlags(varStmt.declarationList);
 
-        let tags: jsdoc.Tag[]|null = moduleTypeTranslator.getJSDoc(varStmt);
+        let tags: jsdoc.Tag[]|null =
+            moduleTypeTranslator.getJSDoc(varStmt, /* reportWarnings */ true);
         const leading = ts.getSyntheticLeadingComments(varStmt);
         if (leading) {
           // Attach non-JSDoc comments to a not emitted statement.
@@ -1029,7 +1049,7 @@ export function jsdocTransformer(
         // and also across modules). For downstream JavaScript code that imports the typedef, we
         // emit an "export.Foo;" that declares and exports the type, and for TypeScript has no
         // impact.
-        const tags = moduleTypeTranslator.getJSDoc(typeAlias);
+        const tags = moduleTypeTranslator.getJSDoc(typeAlias, /* reportWarnings */ true);
         tags.push({tagName: 'typedef', type: typeStr});
         const decl = ts.setSourceMapRange(
             ts.createStatement(ts.createPropertyAccess(

@@ -151,7 +151,7 @@ export function parse(comment: ts.SynthesizedComment): ParsedJSDocComment|null {
  *
  * @param commentText a comment's text content, i.e. the comment w/o /* and * /.
  */
-export function parseContents(commentText: string): {tags: Tag[], warnings?: string[]}|null {
+export function parseContents(commentText: string): ParsedJSDocComment|null {
   // Make sure we have proper line endings before parsing on Windows.
   commentText = normalizeLineEndings(commentText);
   // Strip all the " * " bits from the front of each line.
@@ -268,15 +268,25 @@ const SINGLETON_TAGS = new Set(['deprecated']);
 export const TAGS_CONFLICTING_WITH_TYPE = new Set(['param', 'return']);
 
 /**
+ * A synthesized comment that (possibly) includes the original comment range it was created from.
+ */
+export interface SynthesizedCommentWithOriginal extends ts.SynthesizedComment {
+  /**
+   * The original text range of the comment (relative to the source file's full text).
+   */
+  originalRange?: ts.TextRange;
+}
+
+/**
  * synthesizeLeadingComments parses the leading comments of node, converts them
  * to synthetic comments, and makes sure the original text comments do not get
  * emitted by TypeScript.
  */
-export function synthesizeLeadingComments(node: ts.Node) {
+export function synthesizeLeadingComments(node: ts.Node): SynthesizedCommentWithOriginal[] {
   const existing = ts.getSyntheticLeadingComments(node);
   if (existing) return existing;
   const text = node.getFullText();
-  const synthComments = getLeadingCommentRangesSynthesized(text);
+  const synthComments = getLeadingCommentRangesSynthesized(text, node.getFullStart());
   if (synthComments.length) {
     ts.setSyntheticLeadingComments(node, synthComments);
     suppressLeadingCommentsRecursively(node);
@@ -287,17 +297,25 @@ export function synthesizeLeadingComments(node: ts.Node) {
 /**
  * parseLeadingCommentRangesSynthesized parses the leading comment ranges out of the given text and
  * converts them to SynthesizedComments.
+ * @param offset the offset of text in the source file, e.g. node.getFullStart().
  */
 // VisibleForTesting
-export function getLeadingCommentRangesSynthesized(text: string) {
+export function getLeadingCommentRangesSynthesized(
+    text: string, offset = 0): SynthesizedCommentWithOriginal[] {
   const comments = ts.getLeadingCommentRanges(text, 0) || [];
-  return comments.map((cr): ts.SynthesizedComment => {
+  return comments.map((cr): SynthesizedCommentWithOriginal => {
     // Confusingly, CommentRange in TypeScript includes start and end markers, but
     // SynthesizedComments do not.
     const commentText = cr.kind === ts.SyntaxKind.SingleLineCommentTrivia ?
         text.substring(cr.pos + 2, cr.end) :
         text.substring(cr.pos + 2, cr.end - 2);
-    return {...cr, text: commentText, pos: -1, end: -1};
+    return {
+      ...cr,
+      text: commentText,
+      pos: -1,
+      end: -1,
+      originalRange: {pos: cr.pos + offset, end: cr.end + offset}
+    };
   });
 }
 
@@ -325,7 +343,8 @@ export function suppressLeadingCommentsRecursively(node: ts.Node) {
   suppressCommentsInternal(node);
 }
 
-export function toSynthesizedComment(tags: Tag[], escapeExtraTags?: Set<string>): ts.SynthesizedComment {
+export function toSynthesizedComment(
+    tags: Tag[], escapeExtraTags?: Set<string>): ts.SynthesizedComment {
   return {
     kind: ts.SyntaxKind.MultiLineCommentTrivia,
     text: toStringWithoutStartEnd(tags, escapeExtraTags),
