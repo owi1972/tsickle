@@ -18,6 +18,7 @@ import * as googmodule from './googmodule';
 import * as jsdoc from './jsdoc';
 import {jsdocTransformer} from './jsdoc_transformer';
 import {ModulesManifest} from './modules_manifest';
+import {quotingTransformer} from './quoting_transformer';
 import {getEntityNameText, getIdentifierText, Rewriter, unescapeName} from './rewriter';
 import {containsInlineSourceMap, extractInlineSourceMap, parseSourceMap, removeInlineSourceMap, setInlineSourceMap, SourceMapper} from './source_map_utils';
 import {createTransformerFromSourceMap} from './transformer_sourcemap';
@@ -1941,6 +1942,9 @@ export function emitWithTsickle(
         exportStarTransformer(host, typeChecker, tsOptions, tsickleDiagnostics));
     tsickleSourceTransformers.push(
         jsdocTransformer(host, tsOptions, tsHost, typeChecker, tsickleDiagnostics));
+    if (!host.disableAutoQuoting) {
+      tsickleSourceTransformers.push(quotingTransformer(host, typeChecker, tsickleDiagnostics));
+    }
     tsickleSourceTransformers.push(enumTransformer(typeChecker, tsickleDiagnostics));
     tsickleSourceTransformers.push(decoratorDownlevelTransformer(typeChecker, tsickleDiagnostics));
   } else if (host.transformDecorators) {

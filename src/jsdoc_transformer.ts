@@ -11,7 +11,7 @@ import * as googmodule from './googmodule';
 import * as jsdoc from './jsdoc';
 import {getIdentifierText} from './rewriter';
 import * as transformerUtil from './transformer_util';
-import {createNotEmittedStatementWithComments, createSingleQuoteStringLiteral} from './transformer_util';
+import {createNotEmittedStatementWithComments, createSingleQuoteStringLiteral, debugWarn} from './transformer_util';
 import * as typeTranslator from './type-translator';
 import * as ts from './typescript';
 import {hasModifierFlag} from './util';
@@ -123,29 +123,8 @@ class ModuleTypeTranslator {
       private diagnostics: ts.Diagnostic[],
   ) {}
 
-  logWarning(warning: ts.Diagnostic) {
-    if (this.host.logWarning) this.host.logWarning(warning);
-  }
-
-  /**
-   * debug logs a debug warning.  These should only be used for cases
-   * where tsickle is making a questionable judgement about what to do.
-   * By default, tsickle does not report any warnings to the caller,
-   * and warnings are hidden behind a debug flag, as warnings are only
-   * for tsickle to debug itself.
-   */
-  debugWarn(node: ts.Node, messageText: string) {
-    if (!this.host.logWarning) return;
-    // Use a ts.Diagnosic so that the warning includes context and file offets.
-    const diagnostic: ts.Diagnostic = {
-      file: this.sourceFile,
-      start: node.getStart(),
-      length: node.getEnd() - node.getStart(),
-      messageText,
-      category: ts.DiagnosticCategory.Warning,
-      code: 0,
-    };
-    this.host.logWarning(diagnostic);
+  debugWarn(context: ts.Node, messageText: string) {
+    debugWarn(this.host, context, messageText);
   }
 
   addDiagnostic(diagnostic: ts.Diagnostic) {
@@ -781,7 +760,7 @@ function createMemberTypeDeclaration(
  * In Closure-land, we want identify that the legal name 'bar' can become an
  * ordinary field, but we need to skip strings like 'complex name'.
  */
-function isValidClosurePropertyName(name: string): boolean {
+export function isValidClosurePropertyName(name: string): boolean {
   // In local experimentation, it appears that reserved words like 'var' and
   // 'if' are legal JS and still accepted by Closure.
   return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);

@@ -25,7 +25,8 @@ ts_library(
         "jsdoc.ts",
         "jsdoc_transformer.ts",
         "main.ts",
-        "modules_manifest.ts",
+        "modules_manifest.ts","quoting_transformer.ts",
+
         "rewriter.ts",
         "source_map_utils.ts",
         "transformer_sourcemap.ts",

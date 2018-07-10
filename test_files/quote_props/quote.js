@@ -1,3 +1,5 @@
+// test_files/quote_props/quote.ts(21,3): warning TS0: handle unnamed member:
+// 'invalid-identifier': number;
 // test_files/quote_props/quote.ts(9,13): warning TS0: Quoted has a string index type but is accessed using dotted access. Quoting the access.
 // test_files/quote_props/quote.ts(10,1): warning TS0: Quoted has a string index type but is accessed using dotted access. Quoting the access.
 // test_files/quote_props/quote.ts(13,1): warning TS0: Quoted has a string index type but is accessed using dotted access. Quoting the access.
@@ -14,23 +16,23 @@ var module = module || { id: 'test_files/quote_props/quote.ts' };
 function Quoted() { }
 /** @type {!Quoted} */
 let quoted = {};
-console.log(quoted["hello"]);
-quoted["hello"] = 1;
+console.log(quoted['hello']);
+quoted['hello'] = 1;
 quoted['hello'] = 1;
 /** some comment */
-quoted["hello"] = 1;
+quoted['hello'] = 1;
 /**
  * @record
  * @extends {Quoted}
  */
 function QuotedMixed() { }
 if (false) {
-/** @type {number} */
-QuotedMixed.prototype.foo;
+    /** @type {number} */
+    QuotedMixed.prototype.foo;
     /* Skipping unnamed member:
     'invalid-identifier': number;*/
-/** @type {number} */
-QuotedMixed.prototype.quotedIdent;
+    /** @type {number} */
+    QuotedMixed.prototype.quotedIdent;
 }
 /** @type {!QuotedMixed} */
 let quotedMixed = { foo: 1, 'invalid-identifier': 2, 'quotedIdent': 3 };

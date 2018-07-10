@@ -6,6 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {AnnotatorHost} from './jsdoc_transformer';
 import * as ts from './typescript';
 import {hasModifierFlag} from './util';
 
@@ -721,6 +722,26 @@ export function createMultiLineComment(original: ts.Node, text: string) {
   return ts.setSyntheticTrailingComments(ts.createNotEmittedStatement(original), [comment]);
 }
 
+/**
+ * debugWarn logs a debug warning.
+ *
+ * These should only be used for cases where tsickle is making a questionable judgement about what
+ * to do. By default, tsickle does not report any warnings to the caller, and warnings are hidden
+ * behind a debug flag, as warnings are only for tsickle to debug itself.
+ */
+export function debugWarn(host: AnnotatorHost, context: ts.Node, messageText: string) {
+  if (!host.logWarning) return;
+  // Use a ts.Diagnosic so that the warning includes context and file offets.
+  const diagnostic: ts.Diagnostic = {
+    file: context.getSourceFile(),
+    start: context.getStart(),
+    length: context.getEnd() - context.getStart(),
+    messageText,
+    category: ts.DiagnosticCategory.Warning,
+    code: 0,
+  };
+  host.logWarning(diagnostic);
+}
 
 /**
  * A replacement for ts.getLeadingCommentRanges that returns the union of synthetic and
