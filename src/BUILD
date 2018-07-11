@@ -20,7 +20,6 @@ ts_library(
         "decorator_downlevel_transformer.ts",
         "decorators.ts",
         "enum_transformer.ts",
-        "export_star_transformer.ts",
         "externs.ts",
         "fileoverview_comment_transformer.ts",
         "googmodule.ts",

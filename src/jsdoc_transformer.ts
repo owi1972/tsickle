@@ -362,6 +362,11 @@ export function jsdocTransformer(
     return (sourceFile: ts.SourceFile) => {
       const moduleTypeTranslator = new ModuleTypeTranslator(
           sourceFile, typeChecker, host, diagnostics, /*isForExterns*/ false);
+      /**
+       * The set of all names exported from an export * in the current module. Used to prevent
+       * emitting duplicated exports. The first export * takes precedence in ES6.
+       */
+      const expandedStarImports = new Set<string>();
 
       function visitClassDeclaration(classDecl: ts.ClassDeclaration): ts.Statement[] {
         const mjsdoc = moduleTypeTranslator.getMutableJSDoc(classDecl);
@@ -617,57 +622,87 @@ export function jsdocTransformer(
         mjsdoc.updateComment();
       }
 
+      /** Returns true if a value export should be emitted for the given symbol in export *. */
+      function shouldEmitValueExportForSymbol(sym: ts.Symbol): boolean {
+        if (sym.flags & ts.SymbolFlags.Alias) {
+          sym = typeChecker.getAliasedSymbol(sym);
+        }
+        if ((sym.flags & ts.SymbolFlags.Value) === 0) {
+          // Note: We create explicit reexports via closure at another place in
+          return false;
+        }
+        if (!tsOptions.preserveConstEnums && sym.flags & ts.SymbolFlags.ConstEnum) {
+          return false;
+        }
+        return true;
+      }
+
       /**
        * visitExportDeclaration forward declares exported modules and emits explicit exports for
        * types (which normally do not get emitted by TypeScript).
        */
       function visitExportDeclaration(exportDecl: ts.ExportDeclaration): ts.Node|ts.Node[] {
         if (host.untyped) return exportDecl;
-        const moduleExports = new Map<string, ts.Symbol>();
-        if (exportDecl.moduleSpecifier) {
-          const moduleSymbol = typeChecker.getSymbolAtLocation(exportDecl.moduleSpecifier)!;
+
+        const importedModuleSymbol = exportDecl.moduleSpecifier &&
+            typeChecker.getSymbolAtLocation(exportDecl.moduleSpecifier)!;
+        if (importedModuleSymbol) {
+          // Forward declare all explicitly imported modules, so that symbols can be referenced and
+          // type only modules get force-loaded.
           moduleTypeTranslator.forwardDeclare(
-              (exportDecl.moduleSpecifier as ts.StringLiteral).text, moduleSymbol,
+              (exportDecl.moduleSpecifier as ts.StringLiteral).text, importedModuleSymbol,
               /* isExplicitlyImported? */ true, /* default import? */ false);
-          for (const sym of typeChecker.getExportsOfModule(moduleSymbol)) {
-            moduleExports.set(sym.name, sym);
-          }
         }
+
+        const typesToExport: Array<[string, ts.Symbol]> = [];
         if (!exportDecl.exportClause) {
-          return exportDecl;
+          // export * from '...'
+          // Resolve the * into all value symbols exported, and update the export declaration.
+
+          // Explicitly spelled out exports (i.e. the exports of the current module) take precedence
+          // over implicit ones from export *. Use the current module's exports to filter.
+          const currentModuleSymbol = typeChecker.getSymbolAtLocation(sourceFile);
+          const currentModuleExports = currentModuleSymbol && currentModuleSymbol.exports;
+
+          if (!importedModuleSymbol) {
+            moduleTypeTranslator.error(exportDecl, `export * without module symbol`);
+            return exportDecl;
+          }
+          const exportedSymbols = typeChecker.getExportsOfModule(importedModuleSymbol);
+          const exportSpecifiers: ts.ExportSpecifier[] = [];
+          for (const sym of exportedSymbols) {
+            if (currentModuleExports && currentModuleExports.has(sym.escapedName)) continue;
+            // We might have already generated an export for the given symbol.
+            if (expandedStarImports.has(sym.name)) continue;
+            expandedStarImports.add(sym.name);
+            // Only create an export specifier for values that are exported. For types, the code
+            // below creates specific export statements that match Closure's expectations.
+            if (shouldEmitValueExportForSymbol(sym)) {
+              exportSpecifiers.push(ts.createExportSpecifier(undefined, sym.name));
+            } else {
+              typesToExport.push([sym.name, sym]);
+            }
+          }
+          exportDecl = ts.updateExportDeclaration(
+              exportDecl, exportDecl.decorators, exportDecl.modifiers,
+              ts.createNamedExports(exportSpecifiers), exportDecl.moduleSpecifier);
+        } else {
+          for (const exp of exportDecl.exportClause.elements) {
+            const exportedName = getIdentifierText(exp.name);
+            typesToExport.push(
+                [exportedName, moduleTypeTranslator.mustGetSymbolAtLocation(exp.name)]);
+          }
         }
         const result: ts.Node[] = [exportDecl];
-        const typeTranslator = moduleTypeTranslator.newTypeTranslator(exportDecl);
-        for (const exp of exportDecl.exportClause.elements) {
-          // exp.name might be renaming symbol as in `export {Foo as Bar}`, where e.name would be
-          // 'Bar', and exp.propertyName and sym.name would be 'Foo'. Use exportedName for the
-          // export, but propertyName below to find the symbol.
-          const exportedName = getIdentifierText(exp.name);
-          let sym = typeChecker.getSymbolAtLocation(exp.name);
-          if (!sym) {
-            // sym might not be defined if exportDecl is synthesized, e.g. after expanding an
-            // `export *`.
-            if (!moduleExports) {
-              moduleTypeTranslator.error(
-                  exp, `export ${exportedName} has neither symbol nor module symbol`);
-              continue;
-            }
-            sym = moduleExports.get(getIdentifierText(exp.propertyName || exp.name));
-            if (!sym) {
-              moduleTypeTranslator.error(
-                  exp,
-                  `exported symbol ${exportedName} not found in module ${
-                      (exportDecl.moduleSpecifier as ts.StringLiteral).text}`);
-              continue;
-            }
-          }
+        const typeTranslator =
+            moduleTypeTranslator.newTypeTranslator(ts.getOriginalNode(exportDecl));
+        for (const [exportedName, sym] of typesToExport) {
+          let aliasedSymbol = sym;
           if (sym.flags & ts.SymbolFlags.Alias) {
-            sym = typeChecker.getAliasedSymbol(sym);
+            aliasedSymbol = typeChecker.getAliasedSymbol(sym);
           }
-          const isTypeAlias = ((sym.flags & ts.SymbolFlags.TypeAlias) !== 0 &&
-                               (sym.flags & ts.SymbolFlags.Value) === 0) ||
-              (sym.flags & ts.SymbolFlags.Interface) !== 0 &&
-                  (sym.flags & ts.SymbolFlags.Value) === 0;
+          const isTypeAlias = (aliasedSymbol.flags & ts.SymbolFlags.Value) === 0 &&
+              (aliasedSymbol.flags & (ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Interface)) !== 0;
           if (!isTypeAlias) continue;
           const typeName = typeTranslator.symbolToString(sym, false);
           // Leading newline prevents the typedef from being swallowed.

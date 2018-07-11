@@ -12,7 +12,6 @@ import {SourceMapConsumer, SourceMapGenerator} from 'source-map';
 import {decoratorDownlevelTransformer} from './decorator_downlevel_transformer';
 import {hasExportingDecorator} from './decorators';
 import {enumTransformer} from './enum_transformer';
-import {exportStarTransformer} from './export_star_transformer';
 import {createExterns} from './externs';
 import {transformFileoverviewComment} from './fileoverview_comment_transformer';
 import * as googmodule from './googmodule';
@@ -1939,8 +1938,6 @@ export function emitWithTsickle(
   if (host.transformTypesToClosure) {
     // Only add @suppress {checkTypes} comments when also adding type annotations.
     tsickleSourceTransformers.push(transformFileoverviewComment);
-    tsickleSourceTransformers.push(
-        exportStarTransformer(host, typeChecker, tsOptions, tsickleDiagnostics));
     tsickleSourceTransformers.push(
         jsdocTransformer(host, tsOptions, tsHost, typeChecker, tsickleDiagnostics));
     if (!host.disableAutoQuoting) {
