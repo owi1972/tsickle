@@ -101,6 +101,7 @@ export class ModuleTypeTranslator {
       public typeChecker: ts.TypeChecker,
       private host: AnnotatorHost,
       private diagnostics: ts.Diagnostic[],
+      private isForExterns: boolean,
   ) {}
 
   debugWarn(context: ts.Node, messageText: string) {
@@ -148,6 +149,7 @@ export class ModuleTypeTranslator {
     const translator = new typeTranslator.TypeTranslator(
         this.typeChecker, context, this.host.typeBlackListPaths, this.symbolsToAliasedNames,
         (sym: ts.Symbol) => this.ensureSymbolDeclared(sym));
+    translator.isForExterns = this.isForExterns;
     translator.warn = msg => this.debugWarn(context, msg);
     return translator;
   }
@@ -289,6 +291,10 @@ export class ModuleTypeTranslator {
   protected ensureSymbolDeclared(sym: ts.Symbol) {
     const decl = this.findExportedDeclaration(sym);
     if (!decl) return;
+    if (this.isForExterns) {
+      this.error(decl, `declaration from module used in ambient type: ${sym.name}`);
+      return;
+    }
 
     // Actually import the symbol.
     const sourceFile = decl.getSourceFile();

@@ -34,9 +34,13 @@ export function createExterns(
   let output = '';
   const diagnostics: ts.Diagnostic[] = [];
   const isDts = isDtsFileName(sourceFile.fileName);
-  const mtt = new ModuleTypeTranslator(sourceFile, typeChecker, host, diagnostics);
+  const mtt =
+      new ModuleTypeTranslator(sourceFile, typeChecker, host, diagnostics, /*isForExterns*/ true);
 
-  visitor(sourceFile, []);
+  for (const stmt of sourceFile.statements) {
+    if (!isDts && !hasModifierFlag(stmt, ts.ModifierFlags.Ambient)) continue;
+    visitor(stmt, []);
+  }
 
   return {output, diagnostics};
 
@@ -293,14 +297,7 @@ export function createExterns(
   }
 
   function visitor(node: ts.Node, namespace: ReadonlyArray<string>) {
-    if (!isDts && !hasModifierFlag(node, ts.ModifierFlags.Ambient)) return;
-
     switch (node.kind) {
-      case ts.SyntaxKind.SourceFile:
-        for (const stmt of (node as ts.SourceFile).statements) {
-          visitor(stmt, namespace);
-        }
-        break;
       case ts.SyntaxKind.ModuleDeclaration:
         const decl = node as ts.ModuleDeclaration;
         switch (decl.name.kind) {

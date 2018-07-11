@@ -359,8 +359,8 @@ export function jsdocTransformer(
     (context: ts.TransformationContext) => ts.Transformer<ts.SourceFile> {
   return (context: ts.TransformationContext): ts.Transformer<ts.SourceFile> => {
     return (sourceFile: ts.SourceFile) => {
-      const moduleTypeTranslator =
-          new ModuleTypeTranslator(sourceFile, typeChecker, host, diagnostics);
+      const moduleTypeTranslator = new ModuleTypeTranslator(
+          sourceFile, typeChecker, host, diagnostics, /*isForExterns*/ false);
 
       function visitClassDeclaration(classDecl: ts.ClassDeclaration): ts.Statement[] {
         const mjsdoc = moduleTypeTranslator.getMutableJSDoc(classDecl);
