@@ -145,11 +145,13 @@ export function enumTransformer(typeChecker: ts.TypeChecker, diagnostics: ts.Dia
       }
 
       const varDecl = ts.createVariableStatement(
-          [ts.createToken(ts.SyntaxKind.ConstKeyword)],
-          [ts.createVariableDeclaration(
-              name, undefined,
-              ts.createObjectLiteral(
-                  ts.setTextRange(ts.createNodeArray(values, true), node.members), true))]);
+          undefined,
+          ts.createVariableDeclarationList(
+              [ts.createVariableDeclaration(
+                  name, undefined,
+                  ts.createObjectLiteral(
+                      ts.setTextRange(ts.createNodeArray(values, true), node.members), true))],
+              ts.NodeFlags.Const));
       const comment: ts.SynthesizedComment = {
         kind: ts.SyntaxKind.MultiLineCommentTrivia,
         text: `* @enum {${enumType}} `,

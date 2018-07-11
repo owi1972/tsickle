@@ -232,12 +232,14 @@ export class ModuleTypeTranslator {
     // causing a load. See below for the exception to the rule.
     // const forwardDeclarePrefix = goog.forwardDeclare(moduleNamespace)
     this.forwardDeclares.push(ts.createVariableStatement(
-        [ts.createToken(ts.SyntaxKind.ConstKeyword)],
-        [ts.createVariableDeclaration(
-            forwardDeclarePrefix, undefined,
-            ts.createCall(
-                ts.createPropertyAccess(ts.createIdentifier('goog'), 'forwardDeclare'), undefined,
-                [ts.createLiteral(moduleNamespace)]))]));
+        undefined,
+        ts.createVariableDeclarationList(
+            [ts.createVariableDeclaration(
+                forwardDeclarePrefix, undefined,
+                ts.createCall(
+                    ts.createPropertyAccess(ts.createIdentifier('goog'), 'forwardDeclare'),
+                    undefined, [ts.createLiteral(moduleNamespace)]))],
+            ts.NodeFlags.Const)));
     this.forwardDeclaredModules.add(moduleSymbol);
     const exports = this.typeChecker.getExportsOfModule(moduleSymbol).map(e => {
       if (e.flags & ts.SymbolFlags.Alias) {
