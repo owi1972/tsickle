@@ -1,4 +1,5 @@
-package(default_visibility=["//visibility:public"])
+package(default_visibility = ["//visibility:public"])
+
 load("@build_bazel_rules_typescript//:defs.bzl", "ts_library")
 
 # Copy the 2.4 version of typescript's typings into the project.
@@ -6,27 +7,29 @@ load("@build_bazel_rules_typescript//:defs.bzl", "ts_library")
 # our source tree, and this mechanism allows the :src library to import it.
 genrule(
     name = "typescript-2.4",
-    outs = ["typescript-2.4.d.ts"],
     srcs = ["//test_ts24:node_modules/typescript/lib/typescript.d.ts"],
+    outs = ["typescript-2.4.d.ts"],
     # see https://docs.bazel.build/versions/master/be/general.html#genrule_args
-    cmd = "cp $< $@"
+    cmd = "cp $< $@",
 )
 
 ts_library(
     name = "src",
     srcs = [
-        "decorator_downlevel_transformer.ts",
         "cli_support.ts",
+        "decorator_downlevel_transformer.ts",
         "decorators.ts",
         "enum_transformer.ts",
         "export_star_transformer.ts",
+        "externs.ts",
         "fileoverview_comment_transformer.ts",
         "googmodule.ts",
         "jsdoc.ts",
         "jsdoc_transformer.ts",
         "main.ts",
-        "modules_manifest.ts","quoting_transformer.ts",
-
+        "module_type_translator.ts",
+        "modules_manifest.ts",
+        "quoting_transformer.ts",
         "rewriter.ts",
         "source_map_utils.ts",
         "transformer_sourcemap.ts",
@@ -37,7 +40,7 @@ ts_library(
         "util.ts",
         ":typescript-2.4.d.ts",
     ],
-    deps = [],
     data = ["closure_externs.js"],
     tsconfig = "//:tsconfig.json",
+    deps = [],
 )

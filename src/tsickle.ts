@@ -13,6 +13,7 @@ import {decoratorDownlevelTransformer} from './decorator_downlevel_transformer';
 import {hasExportingDecorator} from './decorators';
 import {enumTransformer} from './enum_transformer';
 import {exportStarTransformer} from './export_star_transformer';
+import {createExterns} from './externs';
 import {transformFileoverviewComment} from './fileoverview_comment_transformer';
 import * as googmodule from './googmodule';
 import * as jsdoc from './jsdoc';
@@ -21,7 +22,6 @@ import {ModulesManifest} from './modules_manifest';
 import {quotingTransformer} from './quoting_transformer';
 import {getEntityNameText, getIdentifierText, Rewriter, unescapeName} from './rewriter';
 import {containsInlineSourceMap, extractInlineSourceMap, parseSourceMap, removeInlineSourceMap, setInlineSourceMap, SourceMapper} from './source_map_utils';
-import {createTransformerFromSourceMap} from './transformer_sourcemap';
 import {createCustomTransformers} from './transformer_util';
 import * as typeTranslator from './type-translator';
 import * as ts from './typescript';
@@ -1105,9 +1105,9 @@ class Annotator extends ClosureRewriter {
           // - export {bar as foo} from ...
           continue;
         }
-      } else {
+      } else if (moduleExports.has(name as ts.__String)) {
         // TODO(#634): check if this is a safe cast.
-        if (moduleExports.has(name as ts.__String)) continue;
+        continue;
       }
       if (this.generatedExports.has(name)) {
         // Already exported via an earlier expansion of an "export * from ...".
@@ -1818,7 +1818,8 @@ class ExternsWriter extends ClosureRewriter {
           break;
       }
       if (!memberName) {
-        this.emit(`\n/* TODO: ${ts.SyntaxKind[member.name.kind]}: ${member.name.getText()} */\n`);
+        this.emit(`\n/* TODO: ${ts.SyntaxKind[member.name.kind]}: ${
+            this.escapeForComment(member.name.getText())} */\n`);
         continue;
       }
       this.emit('/** @const {number} */\n');
@@ -2018,7 +2019,7 @@ export function emitWithTsickle(
       // fileNameToModuleId gives the logical, base path relative ID for the given fileName, which
       // avoids this issue.
       const moduleId = host.fileNameToModuleId(sf.fileName);
-      const {output, diagnostics} = writeExterns(typeChecker, sf, host);
+      const {output, diagnostics} = createExterns(typeChecker, sf, host);
       if (output) {
         externs[moduleId] = output;
       }
