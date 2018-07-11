@@ -642,8 +642,6 @@ export function jsdocTransformer(
        * types (which normally do not get emitted by TypeScript).
        */
       function visitExportDeclaration(exportDecl: ts.ExportDeclaration): ts.Node|ts.Node[] {
-        if (host.untyped) return exportDecl;
-
         const importedModuleSymbol = exportDecl.moduleSpecifier &&
             typeChecker.getSymbolAtLocation(exportDecl.moduleSpecifier)!;
         if (importedModuleSymbol) {
@@ -693,6 +691,9 @@ export function jsdocTransformer(
                 [exportedName, moduleTypeTranslator.mustGetSymbolAtLocation(exp.name)]);
           }
         }
+        // Do not emit typedef re-exports in untyped mode.
+        if (host.untyped) return exportDecl;
+
         const result: ts.Node[] = [exportDecl];
         const typeTranslator =
             moduleTypeTranslator.newTypeTranslator(ts.getOriginalNode(exportDecl));
