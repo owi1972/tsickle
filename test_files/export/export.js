@@ -28,8 +28,12 @@ exports.export3 = export_helper_2.export4;
 const tsickle_forward_declare_2 = goog.forwardDeclare("test_files.export.export_helper");
 /** @typedef {!tsickle_forward_declare_2.Interface} */
 exports.RenamedInterface; // re-export typedef
+// This local should be fine to export.
 /** @type {number} */
 exports.exportLocal = 3;
+// The existence of a local should not prevent "export2" from making
+// it to the exports list.  export2 should only show up once in the
+// above two "export *" lines, though.
 /** @type {number} */
 let export2 = 3;
 const tsickle_forward_declare_3 = goog.forwardDeclare("test_files.export.export_helper");

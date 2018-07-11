@@ -66,7 +66,7 @@ export function exportStarTransformer(
               // - export {bar as foo} from ...
               continue;
             }
-          } else if (moduleExports.has(name as ts.__String))  {
+          } else if (moduleExports.has(name as ts.__String)) {
             // TODO(#634): check if this is a safe cast.
             continue;
           }

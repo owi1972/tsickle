@@ -228,9 +228,9 @@ export abstract class Rewriter {
 
 /** Returns the string contents of a ts.Identifier. */
 export function getIdentifierText(identifier: ts.Identifier): string {
-  // NOTE: the 'text' property on an Identifier may be escaped if it starts
-  // with '__', so just use getText().
-  return identifier.getText();
+  // NOTE: 'escapedText' on an Identifier may be escaped if it starts with '__'. The alternative,
+  // getText(), cannot be used on synthesized nodes, so unescape the identifier below.
+  return unescapeName(identifier.escapedText as string);
 }
 
 /** Returns a dot-joined qualified name (foo.bar.Baz). */
@@ -247,6 +247,6 @@ export function getEntityNameText(name: ts.EntityName): string {
  */
 export function unescapeName(name: string): string {
   // See the private function unescapeIdentifier in TypeScript's utilities.ts.
-  if (name.match(/^___/)) return name.substr(1);
+  if (name.startsWith('___')) return name.substring(1);
   return name;
 }

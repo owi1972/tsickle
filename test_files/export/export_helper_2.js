@@ -20,8 +20,8 @@ exports.TypeDef;
 function Interface() { }
 exports.Interface = Interface;
 if (false) {
-/** @type {string} */
-Interface.prototype.x;
+    /** @type {string} */
+    Interface.prototype.x;
 }
 /** @enum {number} */
 const ConstEnum = {

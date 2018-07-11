@@ -115,8 +115,9 @@ export class ModuleTypeTranslator {
   error(node: ts.Node, messageText: string) {
     const diagnostic: ts.Diagnostic = {
       file: this.sourceFile,
-      start: node.getStart(),
-      length: node.getEnd() - node.getStart(),
+      // Cannot use getStart as node might be synthesized.
+      start: node.pos >= 0 ? node.pos : 0,
+      length: node.end - node.pos,
       messageText,
       category: ts.DiagnosticCategory.Error,
       code: 0,

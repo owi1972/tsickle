@@ -10,6 +10,6 @@ var module = module || { id: 'test_files/export/export_helper_3.ts' };
 function Foo() { }
 exports.Foo = Foo;
 if (false) {
-/** @type {string} */
-Foo.prototype.fooStr;
+    /** @type {string} */
+    Foo.prototype.fooStr;
 }

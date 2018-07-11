@@ -6,6 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {addSyntheticTrailingComment} from 'typescript';
+
 import {hasExportingDecorator} from './decorators';
 import * as googmodule from './googmodule';
 import * as jsdoc from './jsdoc';
@@ -348,10 +350,9 @@ function createClosurePropertyDeclaration(
   return declStmt;
 }
 
-
 /**
- * commonJsToGoogmoduleTransformer returns a transformer factory that converts TypeScript's
- * CommonJS module emit to Closure Compiler compatible goog.module and goog.require statements.
+ * jsdocTransformer returns a transformer factory that converts TypeScript types into the equivalent
+ * JSDoc annotations.
  */
 export function jsdocTransformer(
     host: AnnotatorHost, tsOptions: ts.CompilerOptions, tsHost: ts.CompilerHost,
@@ -497,6 +498,24 @@ export function jsdocTransformer(
         return stmts;
       }
 
+      /**
+       * shouldEmitExportsAssignments returns true if tsickle should emit `exports.Foo = ...` style
+       * export statements.
+       *
+       * TypeScript modules can export types. Because types are pure design-time constructs in
+       * TypeScript, it does not emit any actual exported symbols for these. But tsickle has to emit
+       * an export, so that downstream Closure code (including tsickle-converted Closure code) can
+       * import upstream types. tsickle has to pick a module format for that, because the pure ES6
+       * export would get stripped by TypeScript.
+       *
+       * tsickle uses CommonJS to emit googmodule, and code not using googmodule doesn't care about
+       * the Closure annotations anyway, so tsickle skips emitting exports if the module target
+       * isn't commonjs.
+       */
+      function shouldEmitExportsAssignments() {
+        return tsOptions.module === ts.ModuleKind.CommonJS;
+      }
+
       function visitTypeAliasDeclaration(typeAlias: ts.TypeAliasDeclaration): ts.Statement[] {
         // If the type is also defined as a value, skip emitting it. Closure collapses type & value
         // namespaces, the two emits would conflict if tsickle emitted both.
@@ -505,11 +524,7 @@ export function jsdocTransformer(
         // Type aliases are always emitted as the resolved underlying type, so there is no need to
         // emit anything, except for exported types.
         if (!hasModifierFlag(typeAlias, ts.ModifierFlags.Export)) return [];
-        // A pure ES6 export (`export {Foo}`) is insufficient, as TS does not emit those for pure
-        // types, so tsickle has to pick a module format. We're using CommonJS to emit googmodule,
-        // and code not using googmodule doesn't care about the Closure annotations anyway, so just
-        // skip emitting if the module target isn't commonjs.
-        if (tsOptions.module !== ts.ModuleKind.CommonJS) return [];
+        if (!shouldEmitExportsAssignments()) return [];
 
         const typeName = typeAlias.name.getText();
 
@@ -602,9 +617,153 @@ export function jsdocTransformer(
         mjsdoc.updateComment();
       }
 
-      function visitor(node: ts.Node): ts.Node|ts.Node[] {
-        if (isAmbient(node)) return node;
+      /**
+       * visitExportDeclaration forward declares exported modules and emits explicit exports for
+       * types (which normally do not get emitted by TypeScript).
+       */
+      function visitExportDeclaration(exportDecl: ts.ExportDeclaration): ts.Node|ts.Node[] {
+        if (host.untyped) return exportDecl;
+        const moduleExports = new Map<string, ts.Symbol>();
+        if (exportDecl.moduleSpecifier) {
+          const moduleSymbol = typeChecker.getSymbolAtLocation(exportDecl.moduleSpecifier)!;
+          moduleTypeTranslator.forwardDeclare(
+              (exportDecl.moduleSpecifier as ts.StringLiteral).text, moduleSymbol,
+              /* isExplicitlyImported? */ true, /* default import? */ false);
+          for (const sym of typeChecker.getExportsOfModule(moduleSymbol)) {
+            moduleExports.set(sym.name, sym);
+          }
+        }
+        if (!exportDecl.exportClause) {
+          return exportDecl;
+        }
+        const result: ts.Node[] = [exportDecl];
+        const typeTranslator = moduleTypeTranslator.newTypeTranslator(exportDecl);
+        for (const exp of exportDecl.exportClause.elements) {
+          // exp.name might be renaming symbol as in `export {Foo as Bar}`, where e.name would be
+          // 'Bar', and exp.propertyName and sym.name would be 'Foo'. Use exportedName for the
+          // export, but propertyName below to find the symbol.
+          const exportedName = getIdentifierText(exp.name);
+          let sym = typeChecker.getSymbolAtLocation(exp.name);
+          if (!sym) {
+            // sym might not be defined if exportDecl is synthesized, e.g. after expanding an
+            // `export *`.
+            if (!moduleExports) {
+              moduleTypeTranslator.error(
+                  exp, `export ${exportedName} has neither symbol nor module symbol`);
+              continue;
+            }
+            sym = moduleExports.get(getIdentifierText(exp.propertyName || exp.name));
+            if (!sym) {
+              moduleTypeTranslator.error(
+                  exp,
+                  `exported symbol ${exportedName} not found in module ${
+                      (exportDecl.moduleSpecifier as ts.StringLiteral).text}`);
+              continue;
+            }
+          }
+          if (sym.flags & ts.SymbolFlags.Alias) {
+            sym = typeChecker.getAliasedSymbol(sym);
+          }
+          const isTypeAlias = ((sym.flags & ts.SymbolFlags.TypeAlias) !== 0 &&
+                               (sym.flags & ts.SymbolFlags.Value) === 0) ||
+              (sym.flags & ts.SymbolFlags.Interface) !== 0 &&
+                  (sym.flags & ts.SymbolFlags.Value) === 0;
+          if (!isTypeAlias) continue;
+          const typeName = typeTranslator.symbolToString(sym, false);
+          // Leading newline prevents the typedef from being swallowed.
+          const stmt = ts.createStatement(
+              ts.createPropertyAccess(ts.createIdentifier('exports'), exportedName));
+          addCommentOn(stmt, [{tagName: 'typedef', type: '!' + typeName}]);
+          addSyntheticTrailingComment(
+              stmt, ts.SyntaxKind.SingleLineCommentTrivia, ' re-export typedef', true);
+          result.push(stmt);
+        }
+        return result;
+      }
+
+      /**
+       * Returns the identifiers exported in a single exported statement - typically just one
+       * identifier (e.g. for `export function foo()`), but multiple for `export declare var a, b`.
+       */
+      function getExportDeclarationNames(node: ts.Node): ts.Identifier[] {
         switch (node.kind) {
+          case ts.SyntaxKind.VariableStatement:
+            const varDecl = node as ts.VariableStatement;
+            return varDecl.declarationList.declarations.map((d) => getExportDeclarationNames(d)[0]);
+          case ts.SyntaxKind.VariableDeclaration:
+          case ts.SyntaxKind.FunctionDeclaration:
+          case ts.SyntaxKind.InterfaceDeclaration:
+          case ts.SyntaxKind.ClassDeclaration:
+          case ts.SyntaxKind.ModuleDeclaration:
+            const decl = node as ts.NamedDeclaration;
+            if (!decl.name || decl.name.kind !== ts.SyntaxKind.Identifier) {
+              break;
+            }
+            return [decl.name];
+          case ts.SyntaxKind.TypeAliasDeclaration:
+            const typeAlias = node as ts.TypeAliasDeclaration;
+            return [typeAlias.name];
+          default:
+            break;
+        }
+        moduleTypeTranslator.error(
+            node, `unsupported export declaration ${ts.SyntaxKind[node.kind]}: ${node.getText()}`);
+        return [];
+      }
+
+      /**
+       * Ambient declarations declare types for TypeScript's benefit, and will be removede by
+       * TypeScript during its emit phase. Downstream Closure code however might be importing
+       * symbols from this module, so tsickle must emit a Closure-compatible exports declaration.
+       */
+      function visitExportedAmbient(node: ts.Node): ts.Node[] {
+        if (host.untyped || !shouldEmitExportsAssignments()) return [node];
+
+        const declNames = getExportDeclarationNames(node);
+        const result: ts.Node[] = [node];
+        for (const decl of declNames) {
+          const sym = typeChecker.getSymbolAtLocation(decl)!;
+          const isValue = sym.flags & ts.SymbolFlags.Value;
+          const declName = getIdentifierText(decl);
+          if (node.kind === ts.SyntaxKind.VariableStatement) {
+            // For variables, TypeScript rewrites every reference to the variable name as an
+            // "exports." access, to maintain mutable ES6 exports semantics. Indirecting through the
+            // window object means we reference the correct global symbol. Closure Compiler does
+            // understand that "var foo" in externs corresponds to "window.foo".
+            result.push(ts.createStatement(ts.createAssignment(
+                ts.createPropertyAccess(ts.createIdentifier('exports'), declName),
+                ts.createPropertyAccess(ts.createIdentifier('window'), declName))));
+          } else if (!isValue) {
+            // Do not emit re-exports for ModuleDeclarations.
+            // Ambient ModuleDeclarations are always referenced as global symbols, so they don't
+            // need to be exported.
+            if (node.kind === ts.SyntaxKind.ModuleDeclaration) continue;
+            // Non-value objects do not exist at runtime, so we cannot access the symbol (it only
+            // exists in externs). Export them as a typedef, which forwards to the type in externs.
+            const stmt = ts.createStatement(
+                ts.createPropertyAccess(ts.createIdentifier('exports'), declName));
+            addCommentOn(stmt, [{tagName: 'typedef', type: '!' + declName}]);
+            result.push(stmt);
+          } else {
+            // exports.declName = declName;
+            result.push(ts.createStatement(ts.createAssignment(
+                ts.createPropertyAccess(ts.createIdentifier('exports'), declName),
+                ts.createIdentifier(declName))));
+          }
+        }
+        return result;
+      }
+
+      function visitor(node: ts.Node): ts.Node|ts.Node[] {
+        if (isAmbient(node)) {
+          if (!hasModifierFlag(node, ts.ModifierFlags.Export)) return node;
+          return visitExportedAmbient(node);
+        }
+        switch (node.kind) {
+          case ts.SyntaxKind.ImportDeclaration:
+            return visitImportDeclaration(node as ts.ImportDeclaration);
+          case ts.SyntaxKind.ExportDeclaration:
+            return visitExportDeclaration(node as ts.ExportDeclaration);
           case ts.SyntaxKind.ClassDeclaration:
             return visitClassDeclaration(node as ts.ClassDeclaration);
           case ts.SyntaxKind.InterfaceDeclaration:
@@ -640,8 +799,6 @@ export function jsdocTransformer(
             return visitAssertionExpression(node as ts.AssertionExpression);
           case ts.SyntaxKind.NonNullExpression:
             return visitNonNullExpression(node as ts.NonNullExpression);
-          case ts.SyntaxKind.ImportDeclaration:
-            return visitImportDeclaration(node as ts.ImportDeclaration);
           default:
             break;
         }
