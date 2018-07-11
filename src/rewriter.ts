@@ -44,7 +44,7 @@ export abstract class Rewriter {
       // Insert prefix after any leading @fileoverview comments, so they still come first in the
       // file. This must not use file.getStart() (comment position in the input file), but rahter
       // check comments in the new output, as those (in particular for comments) are unrelated.
-      let insertionIdx = 0;
+      const insertionIdx = 0;
       for (const cr of ts.getLeadingCommentRanges(out, 0) || []) {
         // if (isClosureFileoverviewComment(out.substring(cr.pos, cr.end))) {
         //   insertionIdx = cr.end;

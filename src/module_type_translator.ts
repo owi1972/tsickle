@@ -1,10 +1,16 @@
-import {hasExportingDecorator} from './decorators';
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
 import * as googmodule from './googmodule';
 import * as jsdoc from './jsdoc';
 import {AnnotatorHost, isAmbient} from './jsdoc_transformer';
 import {getIdentifierText} from './rewriter';
-import * as transformerUtil from './transformer_util';
-import {createNotEmittedStatementWithComments, createSingleQuoteStringLiteral, debugWarn} from './transformer_util';
+import {createSingleQuoteStringLiteral, debugWarn} from './transformer_util';
 import * as typeTranslator from './type-translator';
 import * as ts from './typescript';
 import {hasModifierFlag} from './util';
