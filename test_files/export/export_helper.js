@@ -4,11 +4,9 @@
  */
 goog.module('test_files.export.export_helper');
 var module = module || { id: 'test_files/export/export_helper.ts' };
-// This file isn't itself a test case, but it is imported by the
-// export.in.ts test case.
+const tsickle_forward_declare_1 = goog.forwardDeclare("test_files.export.export_helper_2");
 var export_helper_2_1 = goog.require('test_files.export.export_helper_2');
 exports.export4 = export_helper_2_1.export4;
-const tsickle_forward_declare_1 = goog.forwardDeclare("test_files.export.export_helper_2");
 /** @typedef {!tsickle_forward_declare_1.TypeDef} */
 exports.TypeDef; // re-export typedef
 /** @typedef {!tsickle_forward_declare_1.Interface} */
@@ -27,11 +25,10 @@ exports.export2 = 3;
 function Bar() { }
 exports.Bar = Bar;
 if (false) {
-/** @type {number} */
-Bar.prototype.barField;
+    /** @type {number} */
+    Bar.prototype.barField;
 }
 /** @type {number} */
 exports.export5 = 3;
-const tsickle_forward_declare_2 = goog.forwardDeclare("test_files.export.export_helper_2");
-/** @typedef {!tsickle_forward_declare_2.TypeDef} */
+/** @typedef {!tsickle_forward_declare_1.TypeDef} */
 exports.RenamedTypeDef; // re-export typedef

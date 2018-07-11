@@ -704,7 +704,12 @@ export function jsdocTransformer(
           const isTypeAlias = (aliasedSymbol.flags & ts.SymbolFlags.Value) === 0 &&
               (aliasedSymbol.flags & (ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Interface)) !== 0;
           if (!isTypeAlias) continue;
-          const typeName = typeTranslator.symbolToString(sym, false);
+          const typeName = moduleTypeTranslator.symbolsToAliasedNames.get(aliasedSymbol);
+          if (!typeName) {
+            moduleTypeTranslator.error(
+                ts.getOriginalNode(exportDecl), `cannot find alias for re-exported symbol`);
+            continue;
+          }
           // Leading newline prevents the typedef from being swallowed.
           const stmt = ts.createStatement(
               ts.createPropertyAccess(ts.createIdentifier('exports'), exportedName));
