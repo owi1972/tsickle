@@ -144,11 +144,13 @@ const c = 'c';
  * as this breaks their closure plugin :-(
  *
  * @polymerBehavior
+ * @type {!Object}
  */
 const somePolymerBehavior = {};
-/** *
+/**
  * Don't emit type comments for Polymer behaviors
  * if they are declared via the Polymer function.
-  @type {?} */
+ * @type {?}
+ */
 let Polymer;
-Polymer({ behaviors: ['test'] });
+Polymer({ behaviors: [(/** @type {?} */ ('test'))] });
