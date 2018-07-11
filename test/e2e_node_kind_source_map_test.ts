@@ -66,7 +66,7 @@ describe('source maps each node with transformer', () => {
     const compiledJs = files.get('input.js')!;
     const sourceMap = getSourceMapWithName('input.js.map', files);
 
-    assertSourceMapping(compiledJs, sourceMap, `["foo"];`, {line: 6, source: 'input.ts'});
+    assertSourceMapping(compiledJs, sourceMap, `['foo'];`, {line: 6, source: 'input.ts'});
   });
 
   it('maps decorators', () => {
