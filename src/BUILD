@@ -30,8 +30,6 @@ ts_library(
         "modules_manifest.ts",
         "quoting_transformer.ts",
         "rewriter.ts",
-        "source_map_utils.ts",
-        "transformer_sourcemap.ts",
         "transformer_util.ts",
         "tsickle.ts",
         "type-translator.ts",

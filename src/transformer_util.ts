@@ -6,15 +6,14 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AnnotatorHost} from './jsdoc_transformer';
 import * as ts from './typescript';
-import {hasModifierFlag} from './util';
 
 /**
- * ts.createNotEmittedStatement will create a node whose comments are never emitted except for very
- * specific special cases (/// comments). createNotEmittedStatementWithComments creates a not
- * emitted statement and adds comment ranges from the original statement as synthetic comments to
- * it, so that they get retained in the output.
+ * ts.createNotEmittedStatement will create a node, but the comments covered by its text range are
+ * never emittedm except for very specific special cases (/// comments).
+ *
+ * createNotEmittedStatementWithComments creates a not emitted statement and adds comment ranges
+ * from the original statement as synthetic comments to it, so that they get retained in the output.
  */
 export function createNotEmittedStatementWithComments(
     sourceFile: ts.SourceFile, original: ts.Node): ts.Statement {
@@ -30,7 +29,7 @@ export function createNotEmittedStatementWithComments(
 }
 
 /**
- * Converts `ts.CommentRange`s into `ts.SynthesizedComment`s
+ * Converts `ts.CommentRange`s into `ts.SynthesizedComment`s.
  */
 export function synthesizeCommentRanges(
     sourceFile: ts.SourceFile, parsedComments: ts.CommentRange[]): ts.SynthesizedComment[] {
@@ -178,7 +177,8 @@ export function createMultiLineComment(original: ts.Node, text: string) {
  * to do. By default, tsickle does not report any warnings to the caller, and warnings are hidden
  * behind a debug flag, as warnings are only for tsickle to debug itself.
  */
-export function debugWarn(host: AnnotatorHost, context: ts.Node, messageText: string) {
+export function debugWarn(
+    host: {logWarning?(d: ts.Diagnostic): void}, context: ts.Node, messageText: string) {
   if (!host.logWarning) return;
   // Use a ts.Diagnosic so that the warning includes context and file offets.
   const diagnostic: ts.Diagnostic = {
