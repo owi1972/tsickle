@@ -6,8 +6,6 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {isClosureFileoverviewComment} from './fileoverview_comment_transformer';
-import {NOOP_SOURCE_MAPPER, SourceMapper, SourcePosition} from './source_map_utils';
 import * as ts from './typescript';
 
 /** Returns the string contents of a ts.Identifier. */
