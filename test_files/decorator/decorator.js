@@ -11,6 +11,9 @@ const tsickle_forward_declare_2 = goog.forwardDeclare("test_files.decorator.exte
 const tsickle_forward_declare_3 = goog.forwardDeclare("test_files.decorator.external2");
 const tsickle_forward_declare_4 = goog.forwardDeclare("test_files.decorator.only_types");
 goog.require('test_files.decorator.only_types'); // force type-only module to be loaded
+// OtherClass is reachable via the imports for './external' and './external2'.
+// Test that were using it from the right import, and not just the first
+// that allows access to the value. That is important when imports are elided.
 var default_export_1 = goog.require('test_files.decorator.default_export');
 var external_1 = goog.require('test_files.decorator.external');
 var external2_1 = goog.require('test_files.decorator.external2');
