@@ -3,7 +3,7 @@
  * The interesting output is the generated externs.
  */
 
-import * as angular from './angular';
+import * as localAlias from './angular';
 
 declare module './angular' {
   /**
@@ -11,13 +11,17 @@ declare module './angular' {
    * augmenting it.
    */
   namespace sub {
-    type AugmentSubType = string;
+    interface AugmentSubType {
+      prop: string
+    }
   }
 
   /**
-   * sub is a new namespace introduced by this file.
+   * local is a new namespace introduced by this file.
    */
   namespace local {
     type LocalType = string;
+    // TODO: the type below should not be emitted using localAlias.
+    type UsingSymbolFromAugmentedModule = localAlias.Scope;
   }
 }

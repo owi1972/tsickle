@@ -182,6 +182,10 @@ export class GoldenFileTest {
     return /\.es5\b/.test(this.name);
   }
 
+  get hasShim(): boolean {
+    return /\.shim\b/.test(this.name);
+  }
+
   /**
    * Find the absolute path to the tsickle root directory by reading the
    * symlink bazel puts into bazel-bin back into the test_files directory
