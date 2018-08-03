@@ -112,12 +112,13 @@ export function generateExterns(
   let output = '';
   const diagnostics: ts.Diagnostic[] = [];
   const isDts = isDtsFileName(sourceFile.fileName);
+  const isExternalModule = ts.isExternalModule(sourceFile);
+
   const mtt =
       new ModuleTypeTranslator(sourceFile, typeChecker, host, diagnostics, /*isForExterns*/ true);
 
   let namespace: string[] = [];
   let rootNamespace = '';
-  const isExternalModule = ts.isExternalModule(sourceFile);
   if (isExternalModule) {
     // .d.ts files that are modules do not declare global symbols - their symbols must be
     // explicitly imported to be used. However Closure Compiler has no concept of externs that
@@ -430,6 +431,18 @@ export function generateExterns(
     error(node, `${ts.SyntaxKind[node.kind]} not implemented in ${where}`);
   }
 
+  /**
+   * In TypeScript, an unexported local "declare const x: string;" symbol creates a symbol that,
+   * when used locally, is emitted as just "x". That is, it behaves like a variable declared in a
+   * 'declare global' block. Closure Compiler would fail the build if there is no declaration for
+   * "x", so tsickle must generate a global external symbol, i.e. without the namespace wrapper.
+   */
+  function skipNamespaceForLocalDeclaration(declaration: ts.Declaration) {
+    return !hasModifierFlag(declaration, ts.ModifierFlags.Export) && !isDts && isExternalModule &&
+        namespace.length === 1;
+  }
+
+
   function visitor(node: ts.Node, namespace: ReadonlyArray<string>) {
     switch (node.kind) {
       case ts.SyntaxKind.ModuleDeclaration:
@@ -520,16 +533,7 @@ export function generateExterns(
         break;
       case ts.SyntaxKind.VariableStatement:
         for (const decl of (node as ts.VariableStatement).declarationList.declarations) {
-          // In TypeScript, an unexported local "declare const x: string;" variable creates a symbol
-          // that, when used locally, is emitted as just "x". That is, it behaves like a variable
-          // declared in a 'declare global' block.
-          // Closure Compiler would fail the build if there is no declaration for "x", so tsickle
-          // must generate a global external symbol, i.e. without the namespace wrapper.
-          const skipNamespaceForLocalDeclaredVariable =
-              !hasModifierFlag(decl, ts.ModifierFlags.Export) && !isDts &&
-              ts.isExternalModule(sourceFile) && namespace.length === 1;
-
-          writeVariableDeclaration(decl, skipNamespaceForLocalDeclaredVariable ? [] : namespace);
+          writeVariableDeclaration(decl, skipNamespaceForLocalDeclaration(decl) ? [] : namespace);
         }
         break;
       case ts.SyntaxKind.EnumDeclaration:
